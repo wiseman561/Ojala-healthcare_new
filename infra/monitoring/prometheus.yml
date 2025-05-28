@@ -1,0 +1,109 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          - alertmanager:9093
+
+rule_files:
+  - /etc/prometheus/rules/*.yml
+
+scrape_configs:
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  - job_name: 'api-gateway'
+    metrics_path: '/metrics'
+    scrape_interval: 10s
+    static_configs:
+      - targets: ['ojala-api-gateway:80']
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        regex: '(.*):.*'
+        replacement: '$1'
+      - source_labels: [__address__]
+        target_label: service
+        replacement: 'api-gateway'
+
+  - job_name: 'legacy-api'
+    metrics_path: '/metrics'
+    scrape_interval: 10s
+    static_configs:
+      - targets: ['legacy-api:80']
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        regex: '(.*):.*'
+        replacement: '$1'
+      - source_labels: [__address__]
+        target_label: service
+        replacement: 'legacy-api'
+
+  - job_name: 'ojala-api'
+    metrics_path: '/metrics'
+    scrape_interval: 10s
+    static_configs:
+      - targets: ['ojala-api:80']
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        regex: '(.*):.*'
+        replacement: '$1'
+      - source_labels: [__address__]
+        target_label: service
+        replacement: 'ojala-api'
+
+  - job_name: 'ai-integration'
+    metrics_path: '/metrics'
+    scrape_interval: 10s
+    static_configs:
+      - targets: ['legacy-ai-engine:80']
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        regex: '(.*):.*'
+        replacement: '$1'
+      - source_labels: [__address__]
+        target_label: service
+        replacement: 'ai-engine'
+
+  - job_name: 'ojala-web'
+    metrics_path: '/metrics'
+    scrape_interval: 10s
+    static_configs:
+      - targets: ['ojala-web:80']
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        regex: '(.*):.*'
+        replacement: '$1'
+      - source_labels: [__address__]
+        target_label: service
+        replacement: 'web-frontend'
+
+  - job_name: 'patient-app'
+    metrics_path: '/metrics'
+    scrape_interval: 10s
+    static_configs:
+      - targets: ['patient-app:80']
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        regex: '(.*):.*'
+        replacement: '$1'
+      - source_labels: [__address__]
+        target_label: service
+        replacement: 'patient-app'
+
+  - job_name: 'node-exporter'
+    static_configs:
+      - targets: ['node-exporter:9100']
+
+  - job_name: 'cadvisor'
+    static_configs:
+      - targets: ['cadvisor:8080']

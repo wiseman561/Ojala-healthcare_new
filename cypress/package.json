@@ -1,0 +1,27 @@
+{
+  "name": "ojala-healthcare-e2e-tests",
+  "version": "1.0.0",
+  "description": "End-to-end tests for Ojala Healthcare Platform",
+  "main": "index.js",
+  "scripts": {
+    "cypress:open": "cypress open",
+    "cypress:run": "cypress run",
+    "e2e": "cypress run",
+    "e2e:dev": "cypress run --config baseUrl=https://dev.ojala-healthcare.com",
+    "e2e:staging": "cypress run --config baseUrl=https://staging.ojala-healthcare.com",
+    "e2e:prod": "cypress run --config baseUrl=https://ojala-healthcare.com"
+  },
+  "author": "Ojala Healthcare",
+  "license": "UNLICENSED",
+  "private": true,
+  "devDependencies": {
+    "cypress": "^10.3.0",
+    "cypress-file-upload": "^5.0.8",
+    "cypress-localstorage-commands": "^2.2.1",
+    "cypress-multi-reporters": "^1.6.1",
+    "mocha": "^10.0.0",
+    "mochawesome": "^7.1.3",
+    "mochawesome-merge": "^4.2.1",
+    "mochawesome-report-generator": "^6.2.0"
+  }
+}

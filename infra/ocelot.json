@@ -1,0 +1,599 @@
+{
+  "Routes": [
+    {
+      "DownstreamPathTemplate": "/api/patients/{everything}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "api",
+          "Port": 80
+        }
+      ],
+      "UpstreamPathTemplate": "/api/patients/{everything}",
+      "UpstreamHttpMethod": [ "GET", "POST", "PUT", "DELETE" ],
+      "AuthenticationOptions": {
+        "AuthenticationProviderKey": "Bearer"
+      },
+      "RateLimitOptions": {
+        "ClientWhitelist": [],
+        "EnableRateLimiting": true,
+        "Period": "1s",
+        "PeriodTimespan": 1,
+        "Limit": 20
+      }
+    },
+    {
+      "DownstreamPathTemplate": "/api/appointments/{everything}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "api",
+          "Port": 80
+        }
+      ],
+      "UpstreamPathTemplate": "/api/appointments/{everything}",
+      "UpstreamHttpMethod": [ "GET", "POST", "PUT", "DELETE" ],
+      "AuthenticationOptions": {
+        "AuthenticationProviderKey": "Bearer"
+      },
+      "RateLimitOptions": {
+        "ClientWhitelist": [],
+        "EnableRateLimiting": true,
+        "Period": "1s",
+        "PeriodTimespan": 1,
+        "Limit": 20
+      }
+    },
+    {
+      "DownstreamPathTemplate": "/api/medicalrecords/{everything}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "api",
+          "Port": 80
+        }
+      ],
+      "UpstreamPathTemplate": "/api/medicalrecords/{everything}",
+      "UpstreamHttpMethod": [ "GET", "POST", "PUT", "DELETE" ],
+      "AuthenticationOptions": {
+        "AuthenticationProviderKey": "Bearer"
+      },
+      "RateLimitOptions": {
+        "ClientWhitelist": [],
+        "EnableRateLimiting": true,
+        "Period": "1s",
+        "PeriodTimespan": 1,
+        "Limit": 15
+      }
+    },
+    {
+      "DownstreamPathTemplate": "/api/healthcareplans/{everything}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "api",
+          "Port": 80
+        }
+      ],
+      "UpstreamPathTemplate": "/api/healthcareplans/{everything}",
+      "UpstreamHttpMethod": [ "GET", "POST", "PUT", "DELETE" ],
+      "AuthenticationOptions": {
+        "AuthenticationProviderKey": "Bearer"
+      },
+      "RateLimitOptions": {
+        "ClientWhitelist": [],
+        "EnableRateLimiting": true,
+        "Period": "1s",
+        "PeriodTimespan": 1,
+        "Limit": 15
+      }
+    },
+    {
+      "DownstreamPathTemplate": "/api/auth/{everything}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "identity",
+          "Port": 80
+        }
+      ],
+      "UpstreamPathTemplate": "/api/auth/{everything}",
+      "UpstreamHttpMethod": [ "GET", "POST" ],
+      "RateLimitOptions": {
+        "ClientWhitelist": [],
+        "EnableRateLimiting": true,
+        "Period": "1m",
+        "PeriodTimespan": 15,
+        "Limit": 5
+      }
+    },
+    {
+      "DownstreamPathTemplate": "/api/ai/{everything}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "ai-engine",
+          "Port": 80
+        }
+      ],
+      "UpstreamPathTemplate": "/api/ai/{everything}",
+      "UpstreamHttpMethod": [ "GET", "POST", "PUT", "DELETE" ],
+      "AuthenticationOptions": {
+        "AuthenticationProviderKey": "Bearer"
+      },
+      "RateLimitOptions": {
+        "ClientWhitelist": [],
+        "EnableRateLimiting": true,
+        "Period": "1s",
+        "PeriodTimespan": 1,
+        "Limit": 5
+      }
+    },
+    {
+      "DownstreamPathTemplate": "/api/ai/chat",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "ai-engine",
+          "Port": 80
+        }
+      ],
+      "UpstreamPathTemplate": "/api/ai/chat",
+      "UpstreamHttpMethod": [ "POST" ],
+      "AuthenticationOptions": {
+        "AuthenticationProviderKey": "Bearer"
+      },
+      "RateLimitOptions": {
+        "ClientWhitelist": [],
+        "EnableRateLimiting": true,
+        "Period": "10s",
+        "PeriodTimespan": 1,
+        "Limit": 3
+      }
+    },
+    {
+      "DownstreamPathTemplate": "/api/health-score/{everything}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "ai-engine",
+          "Port": 80
+        }
+      ],
+      "UpstreamPathTemplate": "/api/health-score/{everything}",
+      "UpstreamHttpMethod": [ "GET", "POST" ],
+      "AuthenticationOptions": {
+        "AuthenticationProviderKey": "Bearer"
+      },
+      "RateLimitOptions": {
+        "ClientWhitelist": [],
+        "EnableRateLimiting": true,
+        "Period": "1s",
+        "PeriodTimespan": 1,
+        "Limit": 5
+      }
+    },
+    {
+      "DownstreamPathTemplate": "/api/risk-prediction/{everything}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "ai-engine",
+          "Port": 80
+        }
+      ],
+      "UpstreamPathTemplate": "/api/risk-prediction/{everything}",
+      "UpstreamHttpMethod": [ "GET", "POST" ],
+      "AuthenticationOptions": {
+        "AuthenticationProviderKey": "Bearer"
+      },
+      "RateLimitOptions": {
+        "ClientWhitelist": [],
+        "EnableRateLimiting": true,
+        "Period": "1s",
+        "PeriodTimespan": 1,
+        "Limit": 5
+      }
+    },
+    {
+      "DownstreamPathTemplate": "/api/metrics/{everything}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "ai-engine",
+          "Port": 80
+        }
+      ],
+      "UpstreamPathTemplate": "/api/metrics/{everything}",
+      "UpstreamHttpMethod": [ "GET", "POST" ],
+      "AuthenticationOptions": {
+        "AuthenticationProviderKey": "Bearer"
+      },
+      "RateLimitOptions": {
+        "ClientWhitelist": [],
+        "EnableRateLimiting": true,
+        "Period": "1s",
+        "PeriodTimespan": 1,
+        "Limit": 10
+      }
+    },
+    {
+      "DownstreamPathTemplate": "/api/omics/upload",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "ai-engine",
+          "Port": 80
+        }
+      ],
+      "UpstreamPathTemplate": "/api/omics/upload",
+      "UpstreamHttpMethod": [ "POST" ],
+      "AuthenticationOptions": {
+        "AuthenticationProviderKey": "Bearer"
+      },
+      "RateLimitOptions": {
+        "ClientWhitelist": [],
+        "EnableRateLimiting": true,
+        "Period": "1m",
+        "PeriodTimespan": 1,
+        "Limit": 2
+      }
+    },
+    {
+      "DownstreamPathTemplate": "/api/omics/analyze",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "ai-engine",
+          "Port": 80
+        }
+      ],
+      "UpstreamPathTemplate": "/api/omics/analyze",
+      "UpstreamHttpMethod": [ "POST" ],
+      "AuthenticationOptions": {
+        "AuthenticationProviderKey": "Bearer"
+      },
+      "RateLimitOptions": {
+        "ClientWhitelist": [],
+        "EnableRateLimiting": true,
+        "Period": "1m",
+        "PeriodTimespan": 1,
+        "Limit": 3
+      }
+    },
+    {
+      "DownstreamPathTemplate": "/api/telemetry/analyze",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "ai-engine",
+          "Port": 80
+        }
+      ],
+      "UpstreamPathTemplate": "/api/telemetry/analyze",
+      "UpstreamHttpMethod": [ "POST" ],
+      "AuthenticationOptions": {
+        "AuthenticationProviderKey": "Bearer"
+      },
+      "RateLimitOptions": {
+        "ClientWhitelist": [],
+        "EnableRateLimiting": true,
+        "Period": "1s",
+        "PeriodTimespan": 1,
+        "Limit": 10
+      }
+    },
+    {
+      "DownstreamPathTemplate": "/api/healthkit/analyze",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "ai-engine",
+          "Port": 80
+        }
+      ],
+      "UpstreamPathTemplate": "/api/healthkit/analyze",
+      "UpstreamHttpMethod": [ "POST" ],
+      "AuthenticationOptions": {
+        "AuthenticationProviderKey": "Bearer"
+      },
+      "RateLimitOptions": {
+        "ClientWhitelist": [],
+        "EnableRateLimiting": true,
+        "Period": "1s",
+        "PeriodTimespan": 1,
+        "Limit": 10
+      }
+    },
+    {
+      "DownstreamPathTemplate": "/api/nurse-assistant/{everything}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "nurse-assistant",
+          "Port": 80
+        }
+      ],
+      "UpstreamPathTemplate": "/api/nurse-assistant/{everything}",
+      "UpstreamHttpMethod": [ "GET", "POST", "PUT", "DELETE" ],
+      "AuthenticationOptions": {
+        "AuthenticationProviderKey": "Bearer"
+      },
+      "RateLimitOptions": {
+        "ClientWhitelist": [],
+        "EnableRateLimiting": true,
+        "Period": "1s",
+        "PeriodTimespan": 1,
+        "Limit": 15
+      }
+    },
+    {
+      "DownstreamPathTemplate": "/api/alerts/{everything}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "nurse-assistant",
+          "Port": 80
+        }
+      ],
+      "UpstreamPathTemplate": "/api/alerts/{everything}",
+      "UpstreamHttpMethod": [ "GET", "POST", "PUT", "DELETE" ],
+      "AuthenticationOptions": {
+        "AuthenticationProviderKey": "Bearer"
+      },
+      "RateLimitOptions": {
+        "ClientWhitelist": [],
+        "EnableRateLimiting": true,
+        "Period": "1s",
+        "PeriodTimespan": 1,
+        "Limit": 15
+      }
+    },
+    {
+      "DownstreamPathTemplate": "/devices/register",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "device-gateway",
+          "Port": 80
+        }
+      ],
+      "UpstreamPathTemplate": "/devices/register",
+      "UpstreamHttpMethod": [ "POST" ],
+      "RateLimitOptions": {
+        "ClientWhitelist": [],
+        "EnableRateLimiting": true,
+        "Period": "1h",
+        "PeriodTimespan": 1,
+        "Limit": 10
+      }
+    },
+    {
+      "DownstreamPathTemplate": "/devices/{deviceId}/telemetry",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "device-gateway",
+          "Port": 80
+        }
+      ],
+      "UpstreamPathTemplate": "/devices/{deviceId}/telemetry",
+      "UpstreamHttpMethod": [ "POST", "GET" ],
+      "AuthenticationOptions": {
+        "AuthenticationProviderKey": "Bearer"
+      },
+      "RateLimitOptions": {
+        "ClientWhitelist": [],
+        "EnableRateLimiting": true,
+        "Period": "1s",
+        "PeriodTimespan": 1,
+        "Limit": 30
+      }
+    },
+    {
+      "DownstreamPathTemplate": "/devices/{deviceId}/healthkit",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "device-gateway",
+          "Port": 80
+        }
+      ],
+      "UpstreamPathTemplate": "/devices/{deviceId}/healthkit",
+      "UpstreamHttpMethod": [ "POST", "GET" ],
+      "AuthenticationOptions": {
+        "AuthenticationProviderKey": "Bearer"
+      },
+      "RateLimitOptions": {
+        "ClientWhitelist": [],
+        "EnableRateLimiting": true,
+        "Period": "1s",
+        "PeriodTimespan": 1,
+        "Limit": 10
+      }
+    },
+    {
+      "DownstreamPathTemplate": "/patients/{patientId}/devices",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "device-gateway",
+          "Port": 80
+        }
+      ],
+      "UpstreamPathTemplate": "/patients/{patientId}/devices",
+      "UpstreamHttpMethod": [ "GET" ],
+      "AuthenticationOptions": {
+        "AuthenticationProviderKey": "Bearer"
+      },
+      "RateLimitOptions": {
+        "ClientWhitelist": [],
+        "EnableRateLimiting": true,
+        "Period": "1s",
+        "PeriodTimespan": 1,
+        "Limit": 10
+      }
+    },
+    {
+      "DownstreamPathTemplate": "/nurses/{nurseId}/patients",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "api",
+          "Port": 80
+        }
+      ],
+      "UpstreamPathTemplate": "/nurses/{nurseId}/patients",
+      "UpstreamHttpMethod": [ "GET" ],
+      "AuthenticationOptions": {
+        "AuthenticationProviderKey": "Bearer"
+      },
+      "RateLimitOptions": {
+        "ClientWhitelist": [],
+        "EnableRateLimiting": true,
+        "Period": "1s",
+        "PeriodTimespan": 1,
+        "Limit": 10
+      }
+    },
+    {
+      "DownstreamPathTemplate": "/telehealth/sessions",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "api",
+          "Port": 80
+        }
+      ],
+      "UpstreamPathTemplate": "/telehealth/sessions",
+      "UpstreamHttpMethod": [ "GET" ],
+      "AuthenticationOptions": {
+        "AuthenticationProviderKey": "Bearer"
+      },
+      "RateLimitOptions": {
+        "ClientWhitelist": [],
+        "EnableRateLimiting": true,
+        "Period": "1s",
+        "PeriodTimespan": 1,
+        "Limit": 10
+      }
+    },
+    {
+      "DownstreamPathTemplate": "/telehealth/session/{id}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "api",
+          "Port": 80
+        }
+      ],
+      "UpstreamPathTemplate": "/telehealth/session/{id}",
+      "UpstreamHttpMethod": [ "GET" ],
+      "AuthenticationOptions": {
+        "AuthenticationProviderKey": "Bearer"
+      },
+      "RateLimitOptions": {
+        "ClientWhitelist": [],
+        "EnableRateLimiting": true,
+        "Period": "1s",
+        "PeriodTimespan": 1,
+        "Limit": 10
+      }
+    },
+    {
+      "DownstreamPathTemplate": "/telehealth/schedule",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "api",
+          "Port": 80
+        }
+      ],
+      "UpstreamPathTemplate": "/telehealth/schedule",
+      "UpstreamHttpMethod": [ "POST" ],
+      "AuthenticationOptions": {
+        "AuthenticationProviderKey": "Bearer"
+      },
+      "RateLimitOptions": {
+        "ClientWhitelist": [],
+        "EnableRateLimiting": true,
+        "Period": "1m",
+        "PeriodTimespan": 1,
+        "Limit": 5
+      }
+    },
+    {
+      "DownstreamPathTemplate": "/telehealth/join/{id}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "api",
+          "Port": 80
+        }
+      ],
+      "UpstreamPathTemplate": "/telehealth/join/{id}",
+      "UpstreamHttpMethod": [ "GET" ],
+      "AuthenticationOptions": {
+        "AuthenticationProviderKey": "Bearer"
+      },
+      "RateLimitOptions": {
+        "ClientWhitelist": [],
+        "EnableRateLimiting": true,
+        "Period": "10s",
+        "PeriodTimespan": 1,
+        "Limit": 3
+      }
+    },
+    {
+      "DownstreamPathTemplate": "/telehealth/end-session/{id}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "api",
+          "Port": 80
+        }
+      ],
+      "UpstreamPathTemplate": "/telehealth/end-session/{id}",
+      "UpstreamHttpMethod": [ "POST" ],
+      "AuthenticationOptions": {
+        "AuthenticationProviderKey": "Bearer"
+      },
+      "RateLimitOptions": {
+        "ClientWhitelist": [],
+        "EnableRateLimiting": true,
+        "Period": "10s",
+        "PeriodTimespan": 1,
+        "Limit": 3
+      }
+    },
+    {
+      "DownstreamPathTemplate": "/telehealth/session-notes/{id}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "api",
+          "Port": 80
+        }
+      ],
+      "UpstreamPathTemplate": "/telehealth/session-notes/{id}",
+      "UpstreamHttpMethod": [ "POST" ],
+      "AuthenticationOptions": {
+        "AuthenticationProviderKey": "Bearer"
+      },
+      "RateLimitOptions": {
+        "ClientWhitelist": [],
+        "EnableRateLimiting": true,
+        "Period": "10s",
+        "PeriodTimespan": 1,
+        "Limit": 5
+      }
+    },
+    {
+      "DownstreamPathTemplate": "/health",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "api",
+          "Port": 80
+       
+(Content truncated due to size limit. Use line ranges to read in chunks)

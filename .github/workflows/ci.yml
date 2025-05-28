@@ -1,0 +1,271 @@
+name: CI Pipeline
+
+on:
+  push:
+    branches: [ main, ci-workflows ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  backend-ci:
+    name: Backend CI (.NET)
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        dotnet-version: ["8.0.x"]
+    env:
+      DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
+      DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup .NET ${{ matrix.dotnet-version }}
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ matrix.dotnet-version }}
+
+      - name: Restore dependencies
+        run: dotnet restore OjalaHealthcarePlatform.sln
+
+      - name: Build
+        run: dotnet build OjalaHealthcarePlatform.sln --configuration Release --no-restore
+
+      # Lint step (StyleCop) will go here once configured
+      # - name: Lint (.NET)
+      #   run: dotnet build --configuration Release /p:WarningsAsErrors=true
+
+      - name: Test & Generate Coverage
+        run: dotnet test OjalaHealthcarePlatform.sln \
+          --configuration Release --no-build \
+          --logger "trx;LogFileName=backend-test-results.trx" \
+          --results-directory test-results/${{ matrix.os }} \
+          /p:CollectCoverage=true \
+          /p:CoverletOutputFormat=opencover \
+          /p:CoverletOutput=./coverage/backend.opencover.xml
+
+      - name: Upload Backend Test Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-test-results-${{ matrix.os }}
+          path: test-results/${{ matrix.os }}/backend-test-results.trx
+
+      - name: Upload Backend Coverage Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-coverage-report-${{ matrix.os }}
+          path: coverage/backend.opencover.xml
+
+  frontend-ci:
+    name: Frontend CI (Node.js)
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: ["20.x"]
+    env:
+      REACT_APP_API_URL: http://localhost
+      CI: true
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: npm
+          cache-dependency-path: src/frontend/ojala.web/package-lock.json
+
+      - name: Install dependencies
+        working-directory: src/frontend/ojala.web
+        run: npm ci --legacy-peer-deps
+
+      - name: Lint (Frontend)
+        working-directory: src/frontend/ojala.web
+        run: npm run lint
+
+      - name: Test & Generate Coverage
+        working-directory: src/frontend/ojala.web
+        run: npm test -- --coverage --reporters=default --reporters=jest-junit --testResultsProcessor=jest-junit
+
+      - name: Upload Frontend Test Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-test-results
+          path: src/frontend/ojala.web/junit.xml
+
+      - name: Upload Frontend Coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-coverage-report
+          path: src/frontend/ojala.web/coverage
+
+      - name: Build Frontend
+        working-directory: src/frontend/ojala.web
+        run: npm run build
+
+      - name: Upload Frontend Build Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-build
+          path: src/frontend/ojala.web/build
+
+  codeql-analysis:
+    name: CodeQL Analysis
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [javascript, csharp]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+
+      - name: Autobuild (C#)
+        if: matrix.language == 'csharp'
+        uses: github/codeql-action/autobuild@v3
+
+      - name: Setup Node.js for CodeQL (JS)
+        if: matrix.language == 'javascript'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          cache: npm
+          cache-dependency-path: src/frontend/ojala.web/package-lock.json
+
+      - name: Install JS dependencies
+        if: matrix.language == 'javascript'
+        working-directory: src/frontend/ojala.web
+        run: npm ci --legacy-peer-deps
+
+      - name: Build JS for CodeQL
+        if: matrix.language == 'javascript'
+        working-directory: src/frontend/ojala.web
+        run: npm run build
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+
+  build-push-api:
+    needs: backend-ci
+    runs-on: ubuntu-latest
+    outputs:
+      image_url: ${{ steps.build-push.outputs.image }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Build and push API image
+        id: build-push
+        uses: docker/build-push-action@v5
+        with:
+          context: ./src/backend/Ojala.Api
+          push: true
+          tags: yourdockerhubuser/ojala-api:latest
+
+  build-push-identity:
+    needs: backend-ci
+    runs-on: ubuntu-latest
+    outputs:
+      image_url: ${{ steps.build-push.outputs.image }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Build and push Identity image
+        id: build-push
+        uses: docker/build-push-action@v5
+        with:
+          context: ./src/backend/Ojala.Identity
+          push: true
+          tags: yourdockerhubuser/ojala-identity:latest
+
+  build-push-web:
+    needs: frontend-ci
+    runs-on: ubuntu-latest
+    outputs:
+      image_url: ${{ steps.build-push.outputs.image }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Build and push Web image
+        id: build-push
+        uses: docker/build-push-action@v5
+        with:
+          context: ./src/frontend/ojala.web
+          push: true
+          tags: yourdockerhubuser/ojala-web:latest
+
+  terraform-plan:
+    needs: [build-push-api, build-push-identity, build-push-web]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform Init
+        run: terraform init
+        working-directory: infra/terraform
+
+      - name: Terraform Validate
+        run: terraform validate
+        working-directory: infra/terraform
+
+      - name: Terraform Plan
+        run: terraform plan -out=tfplan
+        working-directory: infra/terraform
+        env:
+          TF_VAR_ojala_api_image_url: ${{ needs.build-push-api.outputs.image_url }}
+          TF_VAR_ojala_identity_image_url: ${{ needs.build-push-identity.outputs.image_url }}
+          TF_VAR_ojala_web_image_url: ${{ needs.build-push-web.outputs.image_url }}
+
+      - name: Upload Terraform Plan
+        uses: actions/upload-artifact@v3
+        with:
+          name: terraform-plan
+          path: infra/terraform/tfplan

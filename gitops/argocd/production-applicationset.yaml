@@ -1,0 +1,75 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: ojala-services-production
+  namespace: argocd
+spec:
+  generators:
+  - list:
+      elements:
+      - name: api
+        namespace: production
+        valueFiles:
+        - values-prod.yaml
+      - name: apigateway
+        namespace: production
+        valueFiles:
+        - values-prod.yaml
+      - name: identity
+        namespace: production
+        valueFiles:
+        - values-prod.yaml
+      - name: ai-engine
+        namespace: production
+        valueFiles:
+        - values-prod.yaml
+      - name: nurse-assistant
+        namespace: production
+        valueFiles:
+        - values-prod.yaml
+      - name: web
+        namespace: production
+        valueFiles:
+        - values-prod.yaml
+      - name: patient-portal
+        namespace: production
+        valueFiles:
+        - values-prod.yaml
+      - name: rn-dashboard
+        namespace: production
+        valueFiles:
+        - values-prod.yaml
+      - name: employer-dashboard
+        namespace: production
+        valueFiles:
+        - values-prod.yaml
+      - name: patient-app
+        namespace: production
+        valueFiles:
+        - values-prod.yaml
+  template:
+    metadata:
+      name: '{{name}}-prod'
+      namespace: argocd
+      finalizers:
+      - resources-finalizer.argocd.argoproj.io
+    spec:
+      project: default
+      source:
+        repoURL: https://github.com/your-org/ojala-healthcare-platform.git
+        targetRevision: HEAD
+        path: charts/{{name}}
+        helm:
+          valueFiles:
+          {{range .valueFiles}}
+          - {{.}}
+          {{end}}
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: '{{namespace}}'
+      syncPolicy:
+        # No automated sync for production - requires manual approval
+        syncOptions:
+        - CreateNamespace=true
+        - ApplyOutOfSyncOnly=true
+        - PruneLast=true

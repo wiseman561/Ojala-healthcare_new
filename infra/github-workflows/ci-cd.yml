@@ -1,0 +1,301 @@
+# GitHub Actions CI/CD Workflow for OjalaHealthcarePlatform
+
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+env:
+  AWS_REGION: us-east-1
+  ECR_REPOSITORY_API: ojala-api
+  ECR_REPOSITORY_WEB: ojala-web
+  ENVIRONMENT: ${{ github.ref == 'refs/heads/main' && 'prod' || 'dev' }}
+
+jobs:
+  build-and-test:
+    name: Build and Test
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+      
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v3
+      with:
+        dotnet-version: '6.0.x'
+        
+    - name: Setup Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '16'
+        cache: 'npm'
+        cache-dependency-path: '**/package-lock.json'
+        
+    - name: Restore .NET dependencies
+      run: dotnet restore Ojala.Api/Ojala.Api.csproj
+      
+    - name: Build .NET projects
+      run: dotnet build --configuration Release --no-restore Ojala.Api/Ojala.Api.csproj
+      
+    - name: Run .NET tests with coverage
+      run: |
+        dotnet test Ojala.Tests/Ojala.Tests.csproj \
+          --configuration Release \
+          --no-build \
+          --verbosity normal \
+          --collect:"XPlat Code Coverage" \
+          --results-directory ./coverage
+          
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v3
+      with:
+        directory: ./coverage
+        fail_ci_if_error: true
+        
+    - name: Install frontend dependencies
+      run: |
+        cd Ojala.Web
+        npm ci
+        
+    - name: Lint frontend code
+      run: |
+        cd Ojala.Web
+        npm run lint
+        
+    - name: Build frontend
+      run: |
+        cd Ojala.Web
+        npm run build
+        
+    - name: Run frontend tests
+      run: |
+        cd Ojala.Web
+        npm test -- --coverage
+        
+    - name: SonarCloud Scan
+      uses: SonarSource/sonarcloud-github-action@master
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      with:
+        args: >
+          -Dsonar.projectKey=ojala-healthcare-platform
+          -Dsonar.organization=ojala-healthcare
+          -Dsonar.sources=Ojala.Api,Ojala.Web,Ojala.Services
+          -Dsonar.tests=Ojala.Tests
+          -Dsonar.cs.opencover.reportsPaths=coverage/**/coverage.opencover.xml
+          -Dsonar.javascript.lcov.reportPaths=Ojala.Web/coverage/lcov.info
+          
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: build-artifacts
+        path: |
+          Ojala.Api/bin/Release/net6.0/
+          Ojala.Web/build/
+
+  build-and-push-images:
+    name: Build and Push Docker Images
+    needs: build-and-test
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+      
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v2
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+        
+    - name: Login to Amazon ECR
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v1
+      
+    - name: Build, tag, and push API image to Amazon ECR
+      id: build-api-image
+      env:
+        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        IMAGE_TAG: ${{ github.sha }}
+      run: |
+        docker build -t $ECR_REGISTRY/$ECR_REPOSITORY_API:$IMAGE_TAG -t $ECR_REGISTRY/$ECR_REPOSITORY_API:latest -f Ojala.Api/Dockerfile .
+        docker push $ECR_REGISTRY/$ECR_REPOSITORY_API:$IMAGE_TAG
+        docker push $ECR_REGISTRY/$ECR_REPOSITORY_API:latest
+        echo "::set-output name=image::$ECR_REGISTRY/$ECR_REPOSITORY_API:$IMAGE_TAG"
+        
+    - name: Build, tag, and push Web image to Amazon ECR
+      id: build-web-image
+      env:
+        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        IMAGE_TAG: ${{ github.sha }}
+      run: |
+        docker build -t $ECR_REGISTRY/$ECR_REPOSITORY_WEB:$IMAGE_TAG -t $ECR_REGISTRY/$ECR_REPOSITORY_WEB:latest -f Ojala.Web/Dockerfile .
+        docker push $ECR_REGISTRY/$ECR_REPOSITORY_WEB:$IMAGE_TAG
+        docker push $ECR_REGISTRY/$ECR_REPOSITORY_WEB:latest
+        echo "::set-output name=image::$ECR_REGISTRY/$ECR_REPOSITORY_WEB:$IMAGE_TAG"
+
+  deploy-infrastructure:
+    name: Deploy Infrastructure
+    needs: build-and-push-images
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+      
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v2
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+        
+    - name: Deploy Network Stack
+      run: |
+        aws cloudformation deploy \
+          --template-file infra/cloudformation/network.yml \
+          --stack-name ${{ env.ENVIRONMENT }}-ojala-network \
+          --parameter-overrides \
+            EnvironmentName=${{ env.ENVIRONMENT }} \
+          --capabilities CAPABILITY_IAM \
+          --no-fail-on-empty-changeset
+          
+    - name: Deploy RDS Stack
+      run: |
+        aws cloudformation deploy \
+          --template-file infra/cloudformation/rds-instance.yml \
+          --stack-name ${{ env.ENVIRONMENT }}-ojala-rds \
+          --parameter-overrides \
+            EnvironmentName=${{ env.ENVIRONMENT }} \
+            DBPassword=${{ secrets.DB_PASSWORD }} \
+          --capabilities CAPABILITY_IAM \
+          --no-fail-on-empty-changeset
+          
+    - name: Deploy ECS Cluster Stack
+      run: |
+        aws cloudformation deploy \
+          --template-file infra/cloudformation/ecs-cluster.yml \
+          --stack-name ${{ env.ENVIRONMENT }}-ojala-ecs \
+          --parameter-overrides \
+            EnvironmentName=${{ env.ENVIRONMENT }} \
+            KeyName=${{ secrets.EC2_KEY_NAME }} \
+          --capabilities CAPABILITY_IAM \
+          --no-fail-on-empty-changeset
+
+  deploy-application:
+    name: Deploy Application
+    needs: deploy-infrastructure
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+      
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v2
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+        
+    - name: Login to Amazon ECR
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v1
+      
+    - name: Download task definition
+      run: |
+        aws ecs describe-task-definition \
+          --task-definition ${{ env.ENVIRONMENT }}-ojala-api \
+          --query taskDefinition > task-definition-api.json
+        aws ecs describe-task-definition \
+          --task-definition ${{ env.ENVIRONMENT }}-ojala-web \
+          --query taskDefinition > task-definition-web.json
+          
+    - name: Fill in the new API image ID in the Amazon ECS task definition
+      id: task-def-api
+      uses: aws-actions/amazon-ecs-render-task-definition@v1
+      with:
+        task-definition: task-definition-api.json
+        container-name: ojala-api
+        image: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY_API }}:${{ github.sha }}
+        
+    - name: Fill in the new Web image ID in the Amazon ECS task definition
+      id: task-def-web
+      uses: aws-actions/amazon-ecs-render-task-definition@v1
+      with:
+        task-definition: task-definition-web.json
+        container-name: ojala-web
+        image: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY_WEB }}:${{ github.sha }}
+        
+    - name: Deploy API Amazon ECS task definition
+      uses: aws-actions/amazon-ecs-deploy-task-definition@v1
+      with:
+        task-definition: ${{ steps.task-def-api.outputs.task-definition }}
+        service: ${{ env.ENVIRONMENT }}-ojala-api
+        cluster: ${{ env.ENVIRONMENT }}-ojala-cluster
+        wait-for-service-stability: true
+        
+    - name: Deploy Web Amazon ECS task definition
+      uses: aws-actions/amazon-ecs-deploy-task-definition@v1
+      with:
+        task-definition: ${{ steps.task-def-web.outputs.task-definition }}
+        service: ${{ env.ENVIRONMENT }}-ojala-web
+        cluster: ${{ env.ENVIRONMENT }}-ojala-cluster
+        wait-for-service-stability: true
+        
+    - name: Notify deployment status
+      if: always()
+      uses: rtCamp/action-slack-notify@v2
+      env:
+        SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+        SLACK_CHANNEL: deployments
+        SLACK_COLOR: ${{ job.status }}
+        SLACK_TITLE: Deployment Status
+        SLACK_MESSAGE: 'Deployment to ${{ env.ENVIRONMENT }} ${{ job.status }}'
+        SLACK_FOOTER: 'OjalaHealthcarePlatform CI/CD Pipeline'
+
+  run-e2e-tests:
+    name: Run End-to-End Tests
+    needs: deploy-application
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '16'
+        
+    - name: Install Cypress
+      run: |
+        cd cypress
+        npm ci
+        
+    - name: Run Cypress tests
+      run: |
+        cd cypress
+        npm run e2e:${{ env.ENVIRONMENT }}
+        
+    - name: Upload Cypress screenshots
+      if: failure()
+      uses: actions/upload-artifact@v3
+      with:
+        name: cypress-screenshots
+        path: cypress/screenshots
+        
+    - name: Upload Cypress videos
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: cypress-videos
+        path: cypress/videos

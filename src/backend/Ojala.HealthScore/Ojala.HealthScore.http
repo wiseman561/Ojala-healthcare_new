@@ -1,0 +1,6 @@
+@Ojala.HealthScore_HostAddress = http://localhost:5088
+
+GET {{Ojala.HealthScore_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

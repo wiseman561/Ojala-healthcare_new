@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<IsPackable>false</IsPackable>
+		<Nullable>enable</Nullable>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<!-- Project references so tests can see all API, service, and data layers -->
+		<ProjectReference Include="..\..\src\shared\Ojala.Contracts\Ojala.Contracts.csproj" />
+		<ProjectReference Include="..\..\src\shared\Ojala.Common\Ojala.Common.csproj" />
+		<ProjectReference Include="..\..\src\backend\Ojala.Data\Ojala.Data.csproj" />
+		<ProjectReference Include="..\..\src\backend\Ojala.Services\Ojala.Services.csproj" />
+		<ProjectReference Include="..\..\src\backend\Ojala.ApiGateway\Ojala.ApiGateway.csproj" />
+		<ProjectReference Include="..\..\src\backend\Ojala.Api\Ojala.Api.csproj" />
+		<ProjectReference Include="..\..\src\backend\Ojala.Identity\Ojala.Identity.csproj" />
+		<ProjectReference Include="..\..\src\backend\Ojala.HealthScore\Ojala.HealthScore.csproj" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<!-- Testing and mocking frameworks -->
+		<PackageReference Include="Microsoft.NET.Test.Sdk" />
+		<PackageReference Include="xunit" />
+		<PackageReference Include="xunit.runner.visualstudio" />
+		<PackageReference Include="Moq" />
+		<PackageReference Include="StackExchange.Redis" />
+		<PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" />
+		<PackageReference Include="FluentAssertions" />
+	</ItemGroup>
+
+</Project>

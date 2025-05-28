@@ -1,0 +1,109 @@
+# Exclude version control and editor folders
+.git
+.vs
+.vscode
+.husky
+.github
+.config
+
+# Build logs and error logs
+*.log
+build_log.txt
+lint-errors.log
+ts-errors.log
+test-errors.log
+errors_only.txt
+test-results/
+logs/
+
+# Node.js
+node_modules
+npm-debug.log
+yarn-debug.log
+yarn-error.log
+.pnpm-debug.log
+.npm
+.yarn
+
+# .NET build artifacts
+bin
+obj
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+*.tmp
+*.tmp_proj
+*.log
+*.svclog
+*.pidb
+*.svclog
+*.scc
+
+# Build results
+[Dd]ebug
+[Dd]ebugPublic
+[Rr]elease
+[Rr]eleases
+x64
+x86
+[Ww][Ii][Nn]32
+[Aa][Rr][Mm]
+[Aa][Rr][Mm]64
+bld
+build
+dist
+
+# Test results and logs
+test-results
+cypress
+loadtest
+
+# Documentation and non-build assets
+docs
+CHANGELOG.md
+*.md
+integration_strategy.md
+architecture_diagram.md
+SUMMARY.md
+README.md
+
+# Dev and temporary files
+**/[Tt]emp/
+**/*.bak
+**/*.cache
+**/*.tmp
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# OS specific
+.DS_Store
+Thumbs.db
+UpgradeLog*.htm
+
+# Other directories not needed for builds
+monitoring
+repo-audit
+tools
+charts
+gitops
+vault
+
+# Keep source, solution, Dockerfiles, and config
+!src/**
+!tests/**
+!*.sln
+!Dockerfile
+!docker-compose.yml
+!**/Dockerfile
+!**/*.csproj
+!**/*.json
+!**/*.config
+!**/*.props
+!**/*.targets
+!**/*.yml
+!**/*.yaml
+!**/*.sh
+

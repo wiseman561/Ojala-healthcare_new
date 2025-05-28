@@ -1,0 +1,169 @@
+openapi: 3.0.0
+info:
+  title: Ojala HealthScore API
+  description: API for calculating patient health scores and risk tiers
+  version: 1.0.0
+
+paths:
+  /health-score:
+    post:
+      summary: Calculate health score
+      description: Calculates a health score and risk tier based on patient data
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HealthScoreRequest'
+      responses:
+        '200':
+          description: Health score calculation successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthScoreResponse'
+        '400':
+          description: Invalid request
+
+components:
+  schemas:
+    HealthScoreRequest:
+      type: object
+      required:
+        - patientDemographics
+      properties:
+        patientDemographics:
+          $ref: '#/components/schemas/PatientDemographics'
+        vitalSigns:
+          type: array
+          items:
+            $ref: '#/components/schemas/VitalSign'
+        labResults:
+          type: array
+          items:
+            $ref: '#/components/schemas/LabResult'
+        medications:
+          type: array
+          items:
+            $ref: '#/components/schemas/Medication'
+
+    PatientDemographics:
+      type: object
+      properties:
+        age:
+          type: integer
+          minimum: 0
+          maximum: 120
+        gender:
+          type: string
+          enum: [Male, Female, Other, Unknown]
+        isSmoker:
+          type: boolean
+        hasDiabetes:
+          type: boolean
+        hasHeartDisease:
+          type: boolean
+        hasHypertension:
+          type: boolean
+        previousHospitalizations:
+          type: integer
+          minimum: 0
+
+    VitalSign:
+      type: object
+      required:
+        - name
+        - value
+        - unit
+        - recordedAt
+      properties:
+        name:
+          type: string
+        value:
+          type: number
+          format: double
+        unit:
+          type: string
+        recordedAt:
+          type: string
+          format: date-time
+
+    LabResult:
+      type: object
+      required:
+        - testName
+        - value
+        - unit
+        - minNormalValue
+        - maxNormalValue
+        - recordedAt
+      properties:
+        testName:
+          type: string
+        value:
+          type: number
+          format: double
+        unit:
+          type: string
+        minNormalValue:
+          type: number
+          format: double
+        maxNormalValue:
+          type: number
+          format: double
+        recordedAt:
+          type: string
+          format: date-time
+
+    Medication:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+        dosage:
+          type: string
+        frequency:
+          type: string
+        isHighRisk:
+          type: boolean
+
+    HealthScoreResponse:
+      type: object
+      required:
+        - score
+        - riskTier
+        - riskFactors
+        - calculatedAt
+      properties:
+        score:
+          type: number
+          format: double
+          minimum: 0
+          maximum: 100
+        riskTier:
+          type: string
+          enum: [Low, Moderate, High, VeryHigh, Critical]
+        riskFactors:
+          type: array
+          items:
+            $ref: '#/components/schemas/RiskFactor'
+        calculatedAt:
+          type: string
+          format: date-time
+
+    RiskFactor:
+      type: object
+      required:
+        - name
+        - description
+        - contributionToScore
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        contributionToScore:
+          type: number
+          format: double

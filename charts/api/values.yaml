@@ -1,0 +1,43 @@
+# Default values for api chart
+# This is a YAML-formatted file.
+
+replicaCount: 1
+
+image:
+  repository: registry.hub.docker.com/your-org/ojala-api
+  tag: latest
+  pullPolicy: IfNotPresent
+
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  name: ""
+
+podSecurityContext: {}
+
+securityContext: {}
+
+service:
+  type: ClusterIP
+  port: 80
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}
+
+vault:
+  enabled: true
+  addr: "http://vault:8200"
+  token: "ojala-root-token"

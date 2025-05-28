@@ -1,0 +1,8 @@
+FROM grafana/k6:0.42.0
+
+WORKDIR /loadtest
+
+COPY script.js .
+
+ENTRYPOINT ["k6", "run"]
+CMD ["script.js"]

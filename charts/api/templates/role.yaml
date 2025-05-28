@@ -1,0 +1,18 @@
+{{- if .Values.rbac.create -}}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "api.fullname" . }}
+  labels:
+    {{- include "api.labels" . | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: ["secrets", "configmaps"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+  {{- if .Values.rbac.extraRules }}
+  {{- toYaml .Values.rbac.extraRules | nindent 2 }}
+  {{- end }}
+{{- end }}

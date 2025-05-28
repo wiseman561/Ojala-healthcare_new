@@ -1,0 +1,14 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>    <Nullable>enable</Nullable>    <ImplicitUsings>enable</ImplicitUsings>    <ProjectGuid>{AF1E2E6A0-C770-4B5B-8E94-F0C3E172EDAD}</ProjectGuid>    <OutputType>Library</OutputType>  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Newtonsoft.Json" />
+  </ItemGroup>
+
+</Project>
+
+
+
+
+

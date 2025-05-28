@@ -1,0 +1,34 @@
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: ojala-cluster
+nodes:
+- role: control-plane
+- role: worker
+- role: worker
+networking:
+  apiServerAddress: "127.0.0.1"
+  apiServerPort: 6443
+extraPortMappings:
+  # API port mapping
+  - containerPort: 30500
+    hostPort: 5000
+    protocol: TCP
+  # API Gateway port mapping
+  - containerPort: 30501
+    hostPort: 5001
+    protocol: TCP
+  # Additional API ports if needed
+  - containerPort: 30502
+    hostPort: 5002
+    protocol: TCP
+  - containerPort: 30503
+    hostPort: 5003
+    protocol: TCP
+  # Web portal port mapping
+  - containerPort: 30300
+    hostPort: 3000
+    protocol: TCP
+  # Patient portal port mapping
+  - containerPort: 30301
+    hostPort: 3001
+    protocol: TCP

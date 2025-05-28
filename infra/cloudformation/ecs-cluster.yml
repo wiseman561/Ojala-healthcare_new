@@ -1,0 +1,537 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'OjalaHealthcarePlatform - ECS Cluster'
+
+Parameters:
+  EnvironmentName:
+    Description: Environment name (dev, staging, prod)
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - staging
+      - prod
+  
+  InstanceType:
+    Description: EC2 instance type for ECS container instances
+    Type: String
+    Default: t3.medium
+    AllowedValues:
+      - t3.small
+      - t3.medium
+      - t3.large
+      - m5.large
+      - m5.xlarge
+  
+  ClusterSize:
+    Description: Number of EC2 instances in the ECS cluster
+    Type: Number
+    Default: 2
+    MinValue: 1
+    MaxValue: 10
+  
+  LatestAmiId:
+    Description: Latest Amazon ECS-Optimized AMI
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ecs/optimized-ami/amazon-linux-2/recommended/image_id
+  
+  KeyName:
+    Description: Name of an existing EC2 KeyPair to enable SSH access
+    Type: AWS::EC2::KeyPair::KeyName
+    ConstraintDescription: Must be the name of an existing EC2 KeyPair
+
+Resources:
+  # ECS Cluster
+  ECSCluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: !Sub ${EnvironmentName}-ojala-cluster
+      ClusterSettings:
+        - Name: containerInsights
+          Value: enabled
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-ojala-cluster
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  # ECS Capacity Provider
+  CapacityProvider:
+    Type: AWS::ECS::CapacityProvider
+    Properties:
+      AutoScalingGroupProvider:
+        AutoScalingGroupArn: !Ref AutoScalingGroup
+        ManagedScaling:
+          Status: ENABLED
+          TargetCapacity: 100
+        ManagedTerminationProtection: ENABLED
+      Name: !Sub ${EnvironmentName}-capacity-provider
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  # Capacity Provider Association
+  ClusterCapacityProviderAssociation:
+    Type: AWS::ECS::ClusterCapacityProviderAssociations
+    Properties:
+      Cluster: !Ref ECSCluster
+      CapacityProviders:
+        - !Ref CapacityProvider
+      DefaultCapacityProviderStrategy:
+        - CapacityProvider: !Ref CapacityProvider
+          Weight: 1
+
+  # IAM Role for ECS Instances
+  ECSInstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceforEC2Role
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+      Path: /
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-ecs-instance-role
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  # IAM Instance Profile
+  ECSInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Path: /
+      Roles:
+        - !Ref ECSInstanceRole
+
+  # IAM Role for ECS Service
+  ECSServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceRole
+      Path: /
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-ecs-service-role
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  # IAM Role for Task Execution
+  ECSTaskExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+      Path: /
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-ecs-task-execution-role
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  # Security Group for ECS Instances
+  ECSSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for ECS instances
+      VpcId:
+        Fn::ImportValue: !Sub ${EnvironmentName}-VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+          Description: SSH access
+        - IpProtocol: tcp
+          FromPort: 32768
+          ToPort: 65535
+          CidrIp:
+            Fn::ImportValue: !Sub ${EnvironmentName}-VpcCidr
+          Description: Dynamic port mapping
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-ecs-sg
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  # Launch Template for ECS Instances
+  ECSLaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateName: !Sub ${EnvironmentName}-ecs-launch-template
+      VersionDescription: Initial version
+      LaunchTemplateData:
+        ImageId: !Ref LatestAmiId
+        InstanceType: !Ref InstanceType
+        KeyName: !Ref KeyName
+        SecurityGroupIds:
+          - !Ref ECSSecurityGroup
+        IamInstanceProfile:
+          Name: !Ref ECSInstanceProfile
+        UserData:
+          Fn::Base64: !Sub |
+            #!/bin/bash
+            echo ECS_CLUSTER=${ECSCluster} >> /etc/ecs/ecs.config
+            echo ECS_ENABLE_CONTAINER_METADATA=true >> /etc/ecs/ecs.config
+            echo ECS_ENABLE_SPOT_INSTANCE_DRAINING=true >> /etc/ecs/ecs.config
+            yum install -y aws-cfn-bootstrap aws-cli jq
+            /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource AutoScalingGroup --region ${AWS::Region}
+        BlockDeviceMappings:
+          - DeviceName: /dev/xvda
+            Ebs:
+              VolumeSize: 30
+              VolumeType: gp3
+              DeleteOnTermination: true
+              Encrypted: true
+        TagSpecifications:
+          - ResourceType: instance
+            Tags:
+              - Key: Name
+                Value: !Sub ${EnvironmentName}-ecs-instance
+              - Key: Environment
+                Value: !Ref EnvironmentName
+
+  # Auto Scaling Group for ECS Instances
+  AutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      AutoScalingGroupName: !Sub ${EnvironmentName}-ecs-asg
+      VPCZoneIdentifier:
+        - Fn::ImportValue: !Sub ${EnvironmentName}-PrivateSubnet1
+        - Fn::ImportValue: !Sub ${EnvironmentName}-PrivateSubnet2
+      LaunchTemplate:
+        LaunchTemplateId: !Ref ECSLaunchTemplate
+        Version: !GetAtt ECSLaunchTemplate.LatestVersionNumber
+      MinSize: !Ref ClusterSize
+      MaxSize: !Ref ClusterSize
+      DesiredCapacity: !Ref ClusterSize
+      HealthCheckType: EC2
+      HealthCheckGracePeriod: 300
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-ecs-instance
+          PropagateAtLaunch: true
+        - Key: Environment
+          Value: !Ref EnvironmentName
+          PropagateAtLaunch: true
+    CreationPolicy:
+      ResourceSignal:
+        Timeout: PT15M
+        Count: !Ref ClusterSize
+    UpdatePolicy:
+      AutoScalingRollingUpdate:
+        MinInstancesInService: 1
+        MaxBatchSize: 1
+        PauseTime: PT15M
+        WaitOnResourceSignals: true
+        SuspendProcesses:
+          - HealthCheck
+          - ReplaceUnhealthy
+          - AZRebalance
+          - AlarmNotification
+          - ScheduledActions
+
+  # API Service
+  ApiTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub ${EnvironmentName}-ojala-api
+      NetworkMode: bridge
+      RequiresCompatibilities:
+        - EC2
+      ExecutionRoleArn: !Ref ECSTaskExecutionRole
+      ContainerDefinitions:
+        - Name: ojala-api
+          Image: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/ojala-api:latest
+          Essential: true
+          Memory: 512
+          Cpu: 256
+          PortMappings:
+            - ContainerPort: 80
+              HostPort: 0
+              Protocol: tcp
+          Environment:
+            - Name: ASPNETCORE_ENVIRONMENT
+              Value: !Ref EnvironmentName
+            - Name: VAULT_ADDR
+              Value: !Sub https://vault.${EnvironmentName}.ojala-healthcare.com
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref ApiLogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: ecs
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-ojala-api-task
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  ApiService:
+    Type: AWS::ECS::Service
+    DependsOn: ApiLoadBalancerListener
+    Properties:
+      ServiceName: !Sub ${EnvironmentName}-ojala-api
+      Cluster: !Ref ECSCluster
+      TaskDefinition: !Ref ApiTaskDefinition
+      DesiredCount: 2
+      DeploymentConfiguration:
+        DeploymentCircuitBreaker:
+          Enable: true
+          Rollback: true
+        MaximumPercent: 200
+        MinimumHealthyPercent: 50
+      LoadBalancers:
+        - ContainerName: ojala-api
+          ContainerPort: 80
+          TargetGroupArn: !Ref ApiTargetGroup
+      Role: !Ref ECSServiceRole
+      PlacementStrategies:
+        - Type: spread
+          Field: attribute:ecs.availability-zone
+        - Type: spread
+          Field: instanceId
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-ojala-api-service
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  # Web Service
+  WebTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub ${EnvironmentName}-ojala-web
+      NetworkMode: bridge
+      RequiresCompatibilities:
+        - EC2
+      ExecutionRoleArn: !Ref ECSTaskExecutionRole
+      ContainerDefinitions:
+        - Name: ojala-web
+          Image: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/ojala-web:latest
+          Essential: true
+          Memory: 512
+          Cpu: 256
+          PortMappings:
+            - ContainerPort: 80
+              HostPort: 0
+              Protocol: tcp
+          Environment:
+            - Name: NODE_ENV
+              Value: !Ref EnvironmentName
+            - Name: API_URL
+              Value: !Sub https://api.${EnvironmentName}.ojala-healthcare.com
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref WebLogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: ecs
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-ojala-web-task
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  WebService:
+    Type: AWS::ECS::Service
+    DependsOn: WebLoadBalancerListener
+    Properties:
+      ServiceName: !Sub ${EnvironmentName}-ojala-web
+      Cluster: !Ref ECSCluster
+      TaskDefinition: !Ref WebTaskDefinition
+      DesiredCount: 2
+      DeploymentConfiguration:
+        DeploymentCircuitBreaker:
+          Enable: true
+          Rollback: true
+        MaximumPercent: 200
+        MinimumHealthyPercent: 50
+      LoadBalancers:
+        - ContainerName: ojala-web
+          ContainerPort: 80
+          TargetGroupArn: !Ref WebTargetGroup
+      Role: !Ref ECSServiceRole
+      PlacementStrategies:
+        - Type: spread
+          Field: attribute:ecs.availability-zone
+        - Type: spread
+          Field: instanceId
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-ojala-web-service
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  # Load Balancers
+  ApiLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: !Sub ${EnvironmentName}-ojala-api-lb
+      Scheme: internet-facing
+      LoadBalancerAttributes:
+        - Key: idle_timeout.timeout_seconds
+          Value: '60'
+      Subnets:
+        - Fn::ImportValue: !Sub ${EnvironmentName}-PublicSubnet1
+        - Fn::ImportValue: !Sub ${EnvironmentName}-PublicSubnet2
+      SecurityGroups:
+        - Fn::ImportValue: !Sub ${EnvironmentName}-ApiSecurityGroupId
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-ojala-api-lb
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  ApiTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub ${EnvironmentName}-ojala-api-tg
+      Port: 80
+      Protocol: HTTP
+      VpcId:
+        Fn::ImportValue: !Sub ${EnvironmentName}-VpcId
+      HealthCheckPath: /health
+      HealthCheckIntervalSeconds: 30
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 3
+      TargetType: instance
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-ojala-api-tg
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  ApiLoadBalancerListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref ApiLoadBalancer
+      Port: 80
+      Protocol: HTTP
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref ApiTargetGroup
+
+  WebLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: !Sub ${EnvironmentName}-ojala-web-lb
+      Scheme: internet-facing
+      LoadBalancerAttributes:
+        - Key: idle_timeout.timeout_seconds
+          Value: '60'
+      Subnets:
+        - Fn::ImportValue: !Sub ${EnvironmentName}-PublicSubnet1
+        - Fn::ImportValue: !Sub ${EnvironmentName}-PublicSubnet2
+      SecurityGroups:
+        - Fn::ImportValue: !Sub ${EnvironmentName}-WebSecurityGroupId
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-ojala-web-lb
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  WebTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub ${EnvironmentName}-ojala-web-tg
+      Port: 80
+      Protocol: HTTP
+      VpcId:
+        Fn::ImportValue: !Sub ${EnvironmentName}-VpcId
+      HealthCheckPath: /
+      HealthCheckIntervalSeconds: 30
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 3
+      TargetType: instance
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-ojala-web-tg
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  WebLoadBalancerListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref WebLoadBalancer
+      Port: 80
+      Protocol: HTTP
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref WebTargetGroup
+
+  # CloudWatch Logs
+  ApiLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /ecs/${EnvironmentName}-ojala-api
+      RetentionInDays: 30
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-ojala-api-logs
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  WebLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /ecs/${EnvironmentName}-ojala-web
+      RetentionInDays: 30
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-ojala-web-logs
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+Outputs:
+  ClusterName:
+    Description: The name of the ECS cluster
+    Value: !Ref ECSCluster
+    Export:
+      Name: !Sub ${EnvironmentName}-ECSClusterName
+
+  ApiLoadBalancerDNS:
+    Description: DNS name of the API load balancer
+    Value: !GetAtt ApiLoadBalancer.DNSName
+    Export:
+      Name: !Sub ${EnvironmentName}-ApiLoadBalancerDNS
+
+  WebLoadBalancerDNS:
+    Description: DNS name of the Web load balancer
+    Value: !GetAtt WebLoadBalancer.DNSName
+    Export:
+      Name: !Sub ${EnvironmentName}-WebLoadBalancerDNS
+
+  ECSServiceRole:
+    Description: ARN of the ECS service role
+    Value: !GetAtt ECSServiceRole.Arn
+    Export:
+      Name: !Sub ${EnvironmentName}-ECSServiceRoleArn
+
+  ECSTaskExecutionRole:
+    Description: ARN of the ECS task execution role
+    Value: !GetAtt ECSTaskExecutionRole.Arn
+    Export:
+      Name: !Sub ${EnvironmentName}-ECSTaskExecutionRoleArn

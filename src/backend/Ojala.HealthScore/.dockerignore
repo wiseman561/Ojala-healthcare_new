@@ -1,0 +1,6 @@
+**
+!Dockerfile
+!*.csproj
+!**/*.cs
+!**/*.config
+!appsettings*.json

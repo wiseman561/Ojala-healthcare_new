@@ -1,0 +1,26 @@
+name: Deploy Kubernetes Resources
+
+on:
+  push:
+    branches:
+      - ci-workflows
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: 'latest'
+          
+      - name: Make deploy script executable
+        run: chmod +x scripts/deploy-k8s.sh
+        
+      - name: Run deploy script
+        run: ./scripts/deploy-k8s.sh 

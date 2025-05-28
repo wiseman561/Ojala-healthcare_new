@@ -1,0 +1,89 @@
+# Default values for nurse-assistant chart - Staging Environment
+# This is a YAML-formatted file.
+
+replicaCount: 2
+
+image:
+  repository: registry.hub.docker.com/your-org/ojala-nurse-assistant
+  tag: latest
+  pullPolicy: IfNotPresent
+
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  name: ""
+
+rbac:
+  create: true
+  extraRules: []
+
+podSecurityContext: {}
+
+securityContext: {}
+
+service:
+  type: ClusterIP
+  port: 80
+
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    cert-manager.io/cluster-issuer: "letsencrypt-staging"
+  hosts:
+    - host: nurse-assistant.staging.ojala.local
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: nurse-assistant-staging-tls
+      hosts:
+        - nurse-assistant.staging.ojala.local
+
+resources:
+  limits:
+    cpu: 1000m
+    memory: 1Gi
+  requests:
+    cpu: 200m
+    memory: 256Mi
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+    - weight: 100
+      podAffinityTerm:
+        labelSelector:
+          matchExpressions:
+          - key: app.kubernetes.io/name
+            operator: In
+            values:
+            - nurse-assistant
+        topologyKey: kubernetes.io/hostname
+
+vault:
+  enabled: true
+  addr: "http://vault.staging:8200"
+  token: "ojala-staging-token"
+
+serviceMonitor:
+  enabled: true
+  interval: "15s"
+  scrapeTimeout: "10s"
+  labels:
+    release: prometheus

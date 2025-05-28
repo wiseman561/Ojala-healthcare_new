@@ -1,0 +1,75 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: ojala-services
+  namespace: argocd
+spec:
+  generators:
+  - list:
+      elements:
+      - name: api
+        namespace: staging
+        valueFiles:
+        - values-staging.yaml
+      - name: apigateway
+        namespace: staging
+        valueFiles:
+        - values-staging.yaml
+      - name: identity
+        namespace: staging
+        valueFiles:
+        - values-staging.yaml
+      - name: ai-engine
+        namespace: staging
+        valueFiles:
+        - values-staging.yaml
+      - name: nurse-assistant
+        namespace: staging
+        valueFiles:
+        - values-staging.yaml
+      - name: web
+        namespace: staging
+        valueFiles:
+        - values-staging.yaml
+      - name: patient-portal
+        namespace: staging
+        valueFiles:
+        - values-staging.yaml
+      - name: rn-dashboard
+        namespace: staging
+        valueFiles:
+        - values-staging.yaml
+      - name: employer-dashboard
+        namespace: staging
+        valueFiles:
+        - values-staging.yaml
+      - name: patient-app
+        namespace: staging
+        valueFiles:
+        - values-staging.yaml
+  template:
+    metadata:
+      name: '{{name}}'
+      namespace: argocd
+      finalizers:
+      - resources-finalizer.argocd.argoproj.io
+    spec:
+      project: default
+      source:
+        repoURL: https://github.com/your-org/ojala-healthcare-platform.git
+        targetRevision: HEAD
+        path: charts/{{name}}
+        helm:
+          valueFiles:
+          {{range .valueFiles}}
+          - {{.}}
+          {{end}}
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: '{{namespace}}'
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+        - CreateNamespace=true

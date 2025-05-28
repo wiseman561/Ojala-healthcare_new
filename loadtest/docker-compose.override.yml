@@ -1,0 +1,19 @@
+version: '3.8'
+
+services:
+  loadtest:
+    build:
+      context: .
+      dockerfile: Dockerfile.k6
+    environment:
+      - BASE_URL=http://api-gateway
+      - API_VERSION=v1
+    volumes:
+      - ./results:/results
+    command: ["--out", "json=/results/result.json", "script.js"]
+    networks:
+      - ojala-network
+
+networks:
+  ojala-network:
+    external: true

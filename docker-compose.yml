@@ -1,0 +1,159 @@
+services:
+  vault:
+    image: hashicorp/vault:1.13.3
+    container_name: ojala_platform_clean_scaffold_redo-vault-1
+    ports:
+      - "8200:8200"
+    environment:
+      VAULT_DEV_ROOT_TOKEN_ID: ojaIa-root-token
+      VAULT_DEV_LISTEN_ADDRESS: "0.0.0.0:8200"
+      VAULT_UI: "true"
+    cap_add:
+      - IPC_LOCK
+    command: vault server -dev
+    networks:
+      - ojala-network
+
+  influxdb:
+    image: influxdb:2.6
+    container_name: ojala_platform_clean_scaffold_redo-influxdb-1
+    ports:
+      - "8086:8086"
+    environment:
+      - DOCKER_INFLUXDB_INIT_MODE=setup
+      - DOCKER_INFLUXDB_INIT_USERNAME=ojala
+      - DOCKER_INFLUXDB_INIT_PASSWORD=ojala-password
+      - DOCKER_INFLUXDB_INIT_ORG=ojala
+      - DOCKER_INFLUXDB_INIT_BUCKET=ojala_telemetry
+      - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=ojala-influxdb-token
+    volumes:
+      - influxdb_data:/var/lib/influxdb2
+    networks:
+      - ojala-network
+
+  device-gateway:
+    build:
+      context: ./src/backend/Ojala.DeviceGateway
+      dockerfile: Dockerfile
+    container_name: ojala_platform_clean_scaffold_redo-device-gateway-1
+    ports:
+      - "5020:80"
+    depends_on:
+      - influxdb
+      - vault
+    environment:
+      - NODE_ENV=production
+      - PORT=80
+      - INFLUX_URL=http://influxdb:8086
+      - INFLUX_TOKEN=ojala-influxdb-token
+      - INFLUX_ORG=ojala
+      - INFLUX_BUCKET=ojala_telemetry
+      - JWT_SECRET=super-secret-jwt-key
+      - VAULT_ADDR=http://vault:8200
+    networks:
+      - ojala-network
+
+  ojala-identity:
+    build:
+      context: .
+      dockerfile: src/backend/Ojala.Identity/Dockerfile
+    ports:
+      - "5001:80"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:80
+      - ConnectionStrings__DefaultConnection=${DB_CONNECTION_STRING}
+      - Jwt__Key=${JWT_KEY}
+      - Jwt__Issuer=${JWT_ISSUER}
+      - Jwt__Audience=${JWT_AUDIENCE}
+    depends_on:
+      - ojala-db
+    networks:
+      - ojala-network
+
+  ojala-api:
+    build:
+      context: .
+      dockerfile: src/backend/Ojala.Api/Dockerfile
+    ports:
+      - "5000:80"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:80
+      - ConnectionStrings__DefaultConnection=${DB_CONNECTION_STRING}
+      - IdentityServer__Authority=http://ojala-identity
+      - Redis__ConnectionString=ojala-redis:6379
+    depends_on:
+      - ojala-identity
+      - ojala-db
+      - ojala-redis
+    networks:
+      - ojala-network
+
+  ojala-web:
+    build:
+      context: ./src/frontend/ojala.web
+      dockerfile: Dockerfile
+    ports:
+      - "3000:80"
+    environment:
+      - REACT_APP_API_URL=http://localhost:5000
+    depends_on:
+      - ojala-api
+    networks:
+      - ojala-network
+
+  ojala-db:
+    image: postgres:15
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=${DB_USER}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+      - POSTGRES_DB=${DB_NAME}
+    volumes:
+      - ojala-db-data:/var/lib/postgresql/data
+    networks:
+      - ojala-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  ojala-redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    networks:
+      - ojala-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  ojala-healthscore:
+    build:
+      context: ./src/backend/Ojala.HealthScore
+      dockerfile: Dockerfile
+    image: ojala-healthscore:dev
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:80
+      - HEALTHSCORE_DB_CONN=${HEALTHSCORE_DB_CONN}
+      - AI_MODEL_PATH=${AI_MODEL_PATH}
+    depends_on:
+      - ojala-db
+    ports:
+      - "8083:80"
+    networks:
+      - ojala-network
+
+networks:
+  ojala-network:
+    driver: bridge
+
+volumes:
+  influxdb_data:
+  ojala-db-data:

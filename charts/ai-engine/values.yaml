@@ -1,0 +1,43 @@
+# Default values for ai-engine chart
+# This is a YAML-formatted file.
+
+replicaCount: 1
+
+image:
+  repository: registry.hub.docker.com/your-org/ojala-ai-engine
+  tag: latest
+  pullPolicy: IfNotPresent
+
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  name: ""
+
+podSecurityContext: {}
+
+securityContext: {}
+
+service:
+  type: ClusterIP
+  port: 80
+
+resources:
+  limits:
+    cpu: 1000m
+    memory: 1Gi
+  requests:
+    cpu: 200m
+    memory: 512Mi
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}
+
+vault:
+  enabled: true
+  addr: "http://vault:8200"
+  token: "ojala-root-token"
