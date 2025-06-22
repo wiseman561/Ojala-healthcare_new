@@ -7,6 +7,7 @@ using System;
 using System.IO;
 using Ojala.Identity.Extensions;
 using Microsoft.EntityFrameworkCore;
+using Ojala.Data;
 using Ojala.Data.Entities;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -53,9 +54,6 @@ builder.Services.AddSwaggerGen();
 
 // Add AutoMapper
 builder.Services.AddAutoMapper(typeof(Program).Assembly);
-
-builder.Services.AddDbContext<Ojala.Data.ApplicationDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
 var app = builder.Build();
 

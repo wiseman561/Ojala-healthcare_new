@@ -1,4 +1,11 @@
-# Exclude version control and editor folders
+#################################################################
+#  OJALA HEALTHCARE PLATFORM  –  DOCKER BUILD CONTEXT FILTER
+#################################################################
+#  ▸ Anything not explicitly re-included at the bottom is ignored
+#  ▸ Ensures src/shared and other projects are present for COPY
+#################################################################
+
+#################### 1. Version-control / editor ################
 .git
 .vs
 .vscode
@@ -6,104 +13,59 @@
 .github
 .config
 
-# Build logs and error logs
-*.log
-build_log.txt
-lint-errors.log
-ts-errors.log
-test-errors.log
-errors_only.txt
-test-results/
-logs/
-
-# Node.js
-node_modules
-npm-debug.log
-yarn-debug.log
-yarn-error.log
-.pnpm-debug.log
-.npm
-.yarn
-
-# .NET build artifacts
-bin
-obj
-*.user
-*.suo
-*.userosscache
-*.sln.docstates
-*.tmp
-*.tmp_proj
-*.log
-*.svclog
-*.pidb
-*.svclog
-*.scc
-
-# Build results
-[Dd]ebug
-[Dd]ebugPublic
-[Rr]elease
-[Rr]eleases
-x64
-x86
-[Ww][Ii][Nn]32
-[Aa][Rr][Mm]
-[Aa][Rr][Mm]64
-bld
-build
-dist
-
-# Test results and logs
-test-results
-cypress
-loadtest
-
-# Documentation and non-build assets
-docs
-CHANGELOG.md
-*.md
-integration_strategy.md
-architecture_diagram.md
-SUMMARY.md
-README.md
-
-# Dev and temporary files
-**/[Tt]emp/
-**/*.bak
-**/*.cache
-**/*.tmp
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
-
-# OS specific
+#################### 2. OS / temp files #########################
 .DS_Store
 Thumbs.db
-UpgradeLog*.htm
+*~
+*.swp
+*.tmp
+*.bak
 
-# Other directories not needed for builds
-monitoring
-repo-audit
-tools
-charts
-gitops
-vault
+#################### 3. Build artefacts (.NET & Node) ###########
+# .NET
+bin/
+obj/
+**/bin/
+**/obj/
+[Dd]ebug*/
+[Rr]elease*/
+# Node / pnpm / yarn
+node_modules/
+**/node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
 
-# Keep source, solution, Dockerfiles, and config
+#################### 4. Logs & reports ##########################
+*.log
+logs/
+test-results/
+coverage/
+cypress/
+
+#################### 5. Documentation & local tooling ###########
+docs/
+CHANGELOG.md
+README.md
+*.md
+monitoring/
+repo-audit/
+tools/
+charts/
+gitops/
+vault/
+
+#################### 6. Re-include EVERYTHING the images need ###
 !src/**
 !tests/**
 !*.sln
-!Dockerfile
-!docker-compose.yml
+!docker-compose*.yml
 !**/Dockerfile
 !**/*.csproj
+!**/*.props
 !**/*.json
 !**/*.config
-!**/*.props
 !**/*.targets
 !**/*.yml
 !**/*.yaml
-!**/*.sh
-

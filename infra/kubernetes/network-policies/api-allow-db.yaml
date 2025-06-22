@@ -1,0 +1,55 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: api-allow-database
+  namespace: ojala-ns
+  annotations:
+    description: "Allows API service to communicate with PostgreSQL database"
+    hipaa.compliance: "164.312(a)(1)"
+spec:
+  podSelector:
+    matchLabels:
+      app: ojala-db
+      role: db
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: demo
+      podSelector:
+        matchLabels:
+          app: ojala-api
+          role: api
+    ports:
+    - protocol: TCP
+      port: 5432  # PostgreSQL port
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: api-to-database-egress
+  namespace: demo
+  annotations:
+    description: "Allows API service to initiate connections to database"
+    hipaa.compliance: "164.312(a)(1)"
+spec:
+  podSelector:
+    matchLabels:
+      app: ojala-api
+      role: api
+  policyTypes:
+  - Egress
+  egress:
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: ojala-ns
+      podSelector:
+        matchLabels:
+          app: ojala-db
+          role: db
+    ports:
+    - protocol: TCP
+      port: 5432  # PostgreSQL port

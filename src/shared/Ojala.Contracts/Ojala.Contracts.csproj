@@ -1,10 +1,13 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
-    <PropertyGroup>    <Nullable>enable</Nullable>    <ImplicitUsings>enable</ImplicitUsings>    <ProjectGuid>{AF1E2E6A0-C770-4B5B-8E94-F0C3E172EDAD}</ProjectGuid>    <OutputType>Library</OutputType>  </PropertyGroup>
+    <PropertyGroup>
+        <TargetFramework>net8.0</TargetFramework>
+        <Nullable>enable</Nullable>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <DisableImplicitNuGetFallbackFolder>true</DisableImplicitNuGetFallbackFolder>
+    </PropertyGroup>
 
-  <ItemGroup>
-    <PackageReference Include="Newtonsoft.Json" />
-  </ItemGroup>
+    <!-- Pure DTO / interface library, so keep it dependency-free. -->
 
 </Project>
 

@@ -30,7 +30,7 @@ if (vaultEnabled)
     else
     {
         Console.WriteLine("Vault secrets file not found, using default configuration");
-        
+
         // In Kubernetes, we would wait for the file to be available
         // For development with docker-compose, we'll use the token-based auth
         if (Environment.GetEnvironmentVariable("VAULT_TOKEN") != null)
@@ -38,14 +38,14 @@ if (vaultEnabled)
             Console.WriteLine("Using Vault token-based authentication for development");
         }
     }
-    
+
     // Add Vault authentication service
     builder.Services.AddVaultAuthentication(builder.Configuration);
 }
 
 // Add database context
 builder.Services.AddDbContext<OjalaDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
 // Add services to the container
 builder.Services.AddControllers();

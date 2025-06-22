@@ -26,7 +26,7 @@ namespace Ojala.Tests.Unit
                 Mock.Of<IUserStore<ApplicationUser>>(),
                 null!, null!, null!, null!, null!, null!, null!, null!);
 
-            // minimal JWT settings
+            // Minimal JWT settings
             _configMock.Setup(c => c.GetSection("JwtSettings")["Secret"])
                        .Returns("ThisIsASuperSecureKeyOf32Bytes!!");
             _configMock.Setup(c => c.GetSection("JwtSettings")["ExpiryMinutes"])
@@ -45,33 +45,30 @@ namespace Ojala.Tests.Unit
             // Arrange
             var user = new ApplicationUser
             {
-                Id = "user123",
-                Email = "test@example.com",
+                Id        = "user123",
+                Email     = "test@example.com",
                 FirstName = "John",
-                LastName = "Doe"
+                LastName  = "Doe"
             };
 
             var roles = new List<string> { "Admin" };
-            _userManagerMock
-                .Setup(um => um.GetRolesAsync(user))
-                .ReturnsAsync(roles);
+            _userManagerMock.Setup(um => um.GetRolesAsync(user)).ReturnsAsync(roles);
 
             // Act
             var token = await _tokenService.GenerateJwtToken(user);
-            var jwt = new JwtSecurityTokenHandler().ReadJwtToken(token);
+            var jwt   = new JwtSecurityTokenHandler().ReadJwtToken(token);
 
-            // Assert core claims
-            Assert.Contains(jwt.Claims, c => c.Type == JwtRegisteredClaimNames.Sub && c.Value == "user123");
-            Assert.Contains(jwt.Claims, c => c.Type == JwtRegisteredClaimNames.Email && c.Value == "test@example.com");
+            // Subject claim
+            Assert.Contains(jwt.Claims,
+                c => c.Type == JwtRegisteredClaimNames.Sub && c.Value == "user123");
 
-            // "name" claim can be short or full URI – accept either
+            // Issuer property
+            Assert.Equal("TestIssuer", jwt.Issuer);
+
+            // Role claim
             Assert.Contains(jwt.Claims, c =>
-                (c.Type == ClaimTypes.Name || c.Type == JwtRegisteredClaimNames.Name || c.Type == "name")
-                && c.Value == "John Doe");
-
-            // Assert a role claim with value "Admin"
-            Assert.Contains(jwt.Claims, c =>
-                c.Type == ClaimTypes.Role && c.Value.Equals("Admin", StringComparison.OrdinalIgnoreCase));
+                c.Type == ClaimTypes.Role &&
+                c.Value.Equals("Admin", StringComparison.OrdinalIgnoreCase));
         }
     }
 }

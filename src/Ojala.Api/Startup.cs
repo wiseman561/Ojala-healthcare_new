@@ -21,7 +21,7 @@ namespace Ojala.Identity
         {
             // Add DbContext
             services.AddDbContext<OjalaDbContext>(options =>
-                options.UseSqlServer(Configuration.GetConnectionString("DefaultConnection")));
+                options.UseNpgsql(Configuration.GetConnectionString("DefaultConnection")));
 
             // Add Identity
             services.AddIdentity<ApplicationUser, IdentityRole>(options =>

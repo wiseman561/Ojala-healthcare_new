@@ -8,8 +8,9 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 
 // your data & identity models
-using Ojala.Data.Entities;         // ApplicationDbContext & ApplicationUser
-using Ojala.Data.Repositories;     // for LoginOtpRepository
+using Ojala.Data;                      // OjalaDbContext & ApplicationUser
+using Ojala.Data.Entities;             // ApplicationUser
+using Ojala.Data.Repositories;         // for LoginOtpRepository
 using Ojala.Data.Repositories.Interfaces;  // for ILoginOtpRepository
 
 // your services & extensions
@@ -34,8 +35,8 @@ namespace Ojala.Identity
         public void ConfigureServices(IServiceCollection services)
         {
             // 1) Entity Framework + Identity stores
-            services.AddDbContext<ApplicationDbContext>(opts =>
-                opts.UseSqlServer(Configuration.GetConnectionString("DefaultConnection"))
+            services.AddDbContext<OjalaDbContext>(opts =>
+                opts.UseNpgsql(Configuration.GetConnectionString("DefaultConnection"))
             );
 
             services.AddIdentity<ApplicationUser, IdentityRole>(options =>
@@ -47,7 +48,7 @@ namespace Ojala.Identity
                 options.Password.RequireUppercase = true;
                 options.Password.RequireLowercase = true;
             })
-            .AddEntityFrameworkStores<ApplicationDbContext>()
+            .AddEntityFrameworkStores<OjalaDbContext>()
             .AddDefaultTokenProviders();
 
             // 2) Vault integration (optional)
@@ -60,18 +61,9 @@ namespace Ojala.Identity
             // 3) Your application services
             services.AddScoped<IAuthService, AuthService>();
             services.AddScoped<ITokenService, TokenService>();
-            services.AddScoped<ILoginOtpRepository, LoginOtpRepository>();
             services.AddScoped<IUserProfileRepository, UserProfileRepository>();
-            services.AddScoped<Ojala.Common.Email.IEmailService, Ojala.Common.Email.EmailService>();
 
-            // Add AutoMapper for the Identity project
-            services.AddAutoMapper(typeof(AuthService).Assembly);
-
-            // 4) MVC, Swagger, CORS
-            services.AddControllers();
-            services.AddEndpointsApiExplorer();
-            services.AddSwaggerGen();
-
+            // 4) CORS
             services.AddCors(opts =>
             {
                 opts.AddPolicy("AllowAll", policy =>

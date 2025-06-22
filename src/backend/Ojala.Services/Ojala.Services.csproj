@@ -1,6 +1,11 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
-		<PropertyGroup>		<Nullable>enable</Nullable>		<ImplicitUsings>enable</ImplicitUsings>		<EnableDefaultCompileItems>true</EnableDefaultCompileItems>	</PropertyGroup>
+	<PropertyGroup>
+		<TargetFramework>net8.0</TargetFramework>
+		<Nullable>enable</Nullable>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<DisableImplicitNuGetFallbackFolder>true</DisableImplicitNuGetFallbackFolder>
+	</PropertyGroup>
 
 	<ItemGroup>
 		<PackageReference Include="AutoMapper" />
@@ -10,7 +15,6 @@
 		<PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
 		<PackageReference Include="Newtonsoft.Json" />
 		<PackageReference Include="LaunchDarkly.ServerSdk" />
-		<PackageReference Include="LaunchDarkly.Client" />
 		<PackageReference Include="StackExchange.Redis" />
 	</ItemGroup>
 

@@ -1,0 +1,90 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vault-agent-api-config
+  namespace: demo
+  labels:
+    app: ojala-api
+    component: vault-config
+data:
+  agent.hcl: |
+    exit_after_auth = false
+    pid_file = "/vault/agent/pidfile"
+
+    auto_auth {
+      method "kubernetes" {
+        mount_path = "auth/kubernetes"
+        config = {
+          role = "api-role"
+        }
+      }
+
+      sink "file" {
+        config = {
+          path = "/vault/secrets/token"
+        }
+      }
+    }
+
+    template {
+      source      = "/vault/config/appsettings.tpl"
+      destination = "/vault/secrets/appsettings.json"
+    }
+
+    template {
+      source      = "/vault/config/jwt-secret.tpl"
+      destination = "/vault/secrets/jwt-secret.json"
+    }
+
+    vault {
+      address = "http://vault:8200"
+    }
+
+  appsettings.tpl: |
+    {{- with secret "ojala-secrets/api" -}}
+    {
+      "ConnectionStrings": {
+        "DefaultConnection": "{{ .Data.data.ConnectionStrings_DefaultConnection }}"
+      },
+      "Logging": {
+        "LogLevel": {
+          "Default": "Information",
+          "Microsoft": "Warning",
+          "Microsoft.Hosting.Lifetime": "Information"
+        }
+      },
+      "AllowedHosts": "*",
+      "JwtSettings": {
+        "SecretKeyPath": "/vault/secrets/jwt-secret.json",
+        "Issuer": "{{ .Data.data.JwtSettings_Issuer }}",
+        "Audience": "{{ .Data.data.JwtSettings_Audience }}",
+        "ExpiryInMinutes": {{ .Data.data.JwtSettings_ExpiryInMinutes }}
+      },
+      "FeatureManagement": {
+        "AIIntegration": {{ .Data.data.FeatureManagement_AIIntegration }},
+        "AdvancedAnalytics": {{ .Data.data.FeatureManagement_AdvancedAnalytics }},
+        "TeleHealth": {{ .Data.data.FeatureManagement_TeleHealth }},
+        "PatientPortal": {{ .Data.data.FeatureManagement_PatientPortal }}
+      },
+      "EmailSettings": {
+        "SmtpServer": "{{ .Data.data.EmailSettings_SmtpServer }}",
+        "SmtpPort": {{ .Data.data.EmailSettings_SmtpPort }},
+        "SenderEmail": "{{ .Data.data.EmailSettings_SenderEmail }}",
+        "SenderName": "{{ .Data.data.EmailSettings_SenderName }}"
+      },
+      "VaultSettings": {
+        "Url": "{{ .Data.data.VaultSettings_Url }}",
+        "MountPath": "{{ .Data.data.VaultSettings_MountPath }}"
+      }
+    }
+    {{- end -}}
+
+  jwt-secret.tpl: |
+    {{- with secret "ojala-secrets/api" -}}
+    {
+      "secret": "{{ .Data.data.JwtSettings_SecretKey }}",
+      "issuer": "{{ .Data.data.JwtSettings_Issuer }}",
+      "audience": "{{ .Data.data.JwtSettings_Audience }}",
+      "expiryInMinutes": {{ .Data.data.JwtSettings_ExpiryInMinutes }}
+    }
+    {{- end -}}

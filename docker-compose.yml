@@ -33,8 +33,8 @@ services:
 
   device-gateway:
     build:
-      context: ./src/backend/Ojala.DeviceGateway
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: src/backend/Ojala.DeviceGateway/Dockerfile
     container_name: ojala_platform_clean_scaffold_redo-device-gateway-1
     ports:
       - "5020:80"
@@ -90,6 +90,22 @@ services:
     networks:
       - ojala-network
 
+  ojala-apigateway:
+    build:
+      context: .
+      dockerfile: src/backend/Ojala.ApiGateway/Dockerfile
+    ports:
+      - "5002:80"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:80
+      - ConnectionStrings__DefaultConnection=${DB_CONNECTION_STRING}
+    depends_on:
+      - ojala-api
+      - ojala-identity
+    networks:
+      - ojala-network
+
   ojala-web:
     build:
       context: ./src/frontend/ojala.web
@@ -135,8 +151,8 @@ services:
 
   ojala-healthscore:
     build:
-      context: ./src/backend/Ojala.HealthScore
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: src/backend/Ojala.HealthScore/Dockerfile
     image: ojala-healthscore:dev
     environment:
       - ASPNETCORE_ENVIRONMENT=Development

@@ -1,0 +1,26 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: api-allow-nurse-assistant
+  namespace: demo
+  annotations:
+    description: "Allows nurse-assistant to communicate with API service"
+    hipaa.compliance: "164.312(a)(1)"
+spec:
+  podSelector:
+    matchLabels:
+      app: ojala-api
+      role: api
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          app: ojala-nurse-assistant
+          role: nurse-assistant
+    ports:
+    - protocol: TCP
+      port: 5000  # API container port
+    - protocol: TCP
+      port: 80    # Service port

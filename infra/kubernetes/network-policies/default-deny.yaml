@@ -1,0 +1,29 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+  namespace: demo
+  annotations:
+    description: "Default deny policy - blocks all ingress and egress traffic by default"
+    hipaa.compliance: "164.312(a)(1)"
+spec:
+  podSelector: {}  # Selects all pods in the namespace
+  policyTypes:
+  - Ingress
+  - Egress
+  # No ingress or egress rules means all traffic is denied
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+  namespace: ojala-ns
+  annotations:
+    description: "Default deny policy - blocks all ingress and egress traffic by default"
+    hipaa.compliance: "164.312(a)(1)"
+spec:
+  podSelector: {}  # Selects all pods in the namespace
+  policyTypes:
+  - Ingress
+  - Egress
+  # No ingress or egress rules means all traffic is denied

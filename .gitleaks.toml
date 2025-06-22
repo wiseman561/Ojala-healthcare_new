@@ -1,0 +1,116 @@
+# Gitleaks configuration for Ojalá Healthcare Platform
+# HIPAA §164.312(a)(2)(iv) - Protection of keys and secrets
+
+[global]
+# Enable verbose output for better debugging
+verbose = true
+
+# Set exit code to 1 when secrets are found
+exit-code = 1
+
+# Output format for GitHub Security tab integration
+report-format = "sarif"
+
+# Scan the entire repository
+source = "."
+
+# Exclude common false positive patterns and test files
+[[rules]]
+id = "exclude-test-files"
+description = "Exclude test files and documentation from scanning"
+regex = '''\.(test|spec|example|mock|fixture|doc|md|txt|json|yaml|yml)$'''
+tags = ["exclude"]
+
+[[rules]]
+id = "exclude-node-modules"
+description = "Exclude node_modules directory"
+regex = '''node_modules/'''
+tags = ["exclude"]
+
+[[rules]]
+id = "exclude-build-artifacts"
+description = "Exclude build artifacts and compiled files"
+regex = '''\.(dll|exe|pdb|obj|bin|dist|build|coverage)$'''
+tags = ["exclude"]
+
+# Custom rules for healthcare-specific patterns that should be flagged
+[[rules]]
+id = "hipaa-jwt-secret"
+description = "Detect hardcoded JWT secrets in healthcare applications"
+regex = '''(?i)(jwt|jsonwebtoken).*secret.*=.*['"][a-zA-Z0-9+/=]{32,}['"]'''
+tags = ["jwt", "hipaa", "critical"]
+
+[[rules]]
+id = "hipaa-db-connection"
+description = "Detect database connection strings with credentials"
+regex = '''(?i)(connectionstring|connection_string).*=.*['"][^'"]*(password|pwd|user|uid)=[^'"]*['"]'''
+tags = ["database", "hipaa", "critical"]
+
+[[rules]]
+id = "hipaa-api-key"
+description = "Detect API keys in healthcare applications"
+regex = '''(?i)(api[_-]?key|apikey).*=.*['"][a-zA-Z0-9]{20,}['"]'''
+tags = ["api-key", "hipaa", "high"]
+
+# Standard Gitleaks rules (these are built-in but explicitly defined for clarity)
+[[rules]]
+id = "generic-api-key"
+description = "Generic API Key"
+regex = '''(?i)(api[_-]?key|apikey|api_key).*=.*['"][a-zA-Z0-9]{32,45}['"]'''
+tags = ["api-key", "generic"]
+
+[[rules]]
+id = "aws-access-key"
+description = "AWS Access Key"
+regex = '''AKIA[0-9A-Z]{16}'''
+tags = ["aws", "access-key"]
+
+[[rules]]
+id = "aws-secret-key"
+description = "AWS Secret Key"
+regex = '''(?i)aws[_-]?secret[_-]?access[_-]?key.*=.*['"][A-Za-z0-9/+=]{40}['"]'''
+tags = ["aws", "secret-key"]
+
+[[rules]]
+id = "private-key"
+description = "Private Key"
+regex = '''-----BEGIN[^-]+PRIVATE KEY-----'''
+tags = ["private-key", "critical"]
+
+[[rules]]
+id = "ssh-private-key"
+description = "SSH Private Key"
+regex = '''-----BEGIN OPENSSH PRIVATE KEY-----'''
+tags = ["ssh", "private-key", "critical"]
+
+# Whitelist known false positives
+[[rules.allowlist]]
+description = "Allowlist for known false positives"
+paths = [
+    "docs/",
+    "*.md",
+    "*.txt",
+    "test-results/",
+    "coverage/",
+    "node_modules/",
+    "bin/",
+    "obj/",
+    ".git/",
+    "*.test.js",
+    "*.spec.js",
+    "*.test.cs",
+    "*.spec.cs"
+]
+
+# Allowlist specific patterns that are known to be safe
+[[rules.allowlist]]
+description = "Allowlist safe patterns"
+regexes = [
+    '''example[_-]?key''',
+    '''test[_-]?secret''',
+    '''mock[_-]?token''',
+    '''dummy[_-]?password''',
+    '''placeholder[_-]?api[_-]?key''',
+    '''TODO.*remove.*secret''',
+    '''FIXME.*replace.*password'''
+]

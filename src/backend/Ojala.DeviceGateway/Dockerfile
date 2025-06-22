@@ -24,7 +24,6 @@ RUN groupadd --system appgroup && \
     useradd --system --gid appgroup --shell /bin/bash appuser
 
 # Copy built application
-COPY --chown=appuser:appgroup --from=build /app/dist ./dist
 COPY --chown=appuser:appgroup --from=build /app/node_modules ./node_modules
 COPY --chown=appuser:appgroup --from=build /app/package*.json ./
 

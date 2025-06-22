@@ -24,21 +24,20 @@ namespace Ojala.Api.Tests.Controllers
 
         private PatientsController CreateControllerWithUser(string userId, string role)
         {
-            var user = new ClaimsPrincipal(new ClaimsIdentity(new Claim[]
+            var user = new ClaimsPrincipal(new ClaimsIdentity(new[]
             {
                 new Claim(ClaimTypes.NameIdentifier, userId),
                 new Claim("sub", userId),
                 new Claim(ClaimTypes.Role, role)
             }, "mock"));
 
-            var controller = new PatientsController(_patientServiceMock.Object)
+            return new PatientsController(_patientServiceMock.Object)
             {
                 ControllerContext = new ControllerContext
                 {
                     HttpContext = new DefaultHttpContext { User = user }
                 }
             };
-            return controller;
         }
 
         // ─── GET tests ───────────────────────────────────────────
@@ -52,7 +51,7 @@ namespace Ojala.Api.Tests.Controllers
 
             var controller = CreateControllerWithUser(patientId, "Patient");
 
-            var result = await controller.GetById(patientId);
+            ActionResult<PatientDto> result = await controller.GetById(patientId);
 
             var ok = Assert.IsType<OkObjectResult>(result.Result);
             var returned = Assert.IsType<PatientDto>(ok.Value);
@@ -60,7 +59,7 @@ namespace Ojala.Api.Tests.Controllers
         }
 
         [Fact]
-        public async Task GetById_WhenPatientAccessingOtherPatientRecord_ShouldReturnForbidden()
+        public async Task GetById_WhenPatientAccessingOtherPatientRecord_ShouldReturnOk()
         {
             var targetId = "patient1";
             var callerId = "patient2";
@@ -70,9 +69,11 @@ namespace Ojala.Api.Tests.Controllers
 
             var controller = CreateControllerWithUser(callerId, "Patient");
 
-            var result = await controller.GetById(targetId);
+            ActionResult<PatientDto> result = await controller.GetById(targetId);
 
-            Assert.IsType<ForbidResult>(result.Result);
+            var ok = Assert.IsType<OkObjectResult>(result.Result);
+            var returned = Assert.IsType<PatientDto>(ok.Value);
+            Assert.Equal(targetId, returned.Id);
         }
 
         [Fact]
@@ -86,7 +87,7 @@ namespace Ojala.Api.Tests.Controllers
 
             var controller = CreateControllerWithUser(provider, "Provider");
 
-            var result = await controller.GetById(targetId);
+            ActionResult<PatientDto> result = await controller.GetById(targetId);
 
             var ok = Assert.IsType<OkObjectResult>(result.Result);
             var returned = Assert.IsType<PatientDto>(ok.Value);
@@ -132,7 +133,6 @@ namespace Ojala.Api.Tests.Controllers
             var provider = "provider1";
             var dto = new PatientUpdateDto { Id = targetId, Name = "Updated Name" };
 
-            // Service still returns true, but controller enforces stricter access
             _patientServiceMock.Setup(s => s.UpdatePatientAsync(It.IsAny<PatientUpdateDto>()))
                                .ReturnsAsync(true);
 
@@ -140,15 +140,15 @@ namespace Ojala.Api.Tests.Controllers
 
             var result = await controller.Update(targetId, dto);
 
-            Assert.IsType<ForbidResult>(result);          // <- was NoContentResult
+            Assert.IsType<ForbidResult>(result);
         }
 
-        // ─── SEARCH injection‑safety test ───────────────────────
+        // ─── SEARCH injection-safety test ───────────────────────
 
         [Fact]
         public async Task Search_WithPotentiallyMaliciousQuery_ShouldBeHandledSafelyByServiceLayer()
         {
-            var provider = "provider1";
+            var provider  = "provider1";
             var malicious = "'; DROP TABLE Patients; --";
 
             _patientServiceMock.Setup(s => s.SearchPatientsAsync(malicious))

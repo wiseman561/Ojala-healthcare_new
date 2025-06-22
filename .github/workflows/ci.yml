@@ -1,271 +1,257 @@
-name: CI Pipeline
+name: Ojala Healthcare Platform CI/CD
 
 on:
   push:
-    branches: [ main, ci-workflows ]
+    branches: [ main, develop ]
   pull_request:
     branches: [ main ]
 
+env:
+  DOTNET_VERSION: '8.0.x'
+  NODE_VERSION: '18.x'
+
 jobs:
-  backend-ci:
-    name: Backend CI (.NET)
-    runs-on: ${{ matrix.os }}
+  # Job 1: Repository Structure Validation
+  validate-structure:
+    runs-on: ubuntu-latest
+    name: Validate Repository Structure
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Check for duplicate folders
+      run: |
+        echo "🔍 Checking for legacy duplicate folders..."
+        if [ -d "apps" ] || [ -d "backend" ] || [ -d "libs" ]; then
+          echo "❌ Legacy duplicate folders found! Run cleanup script."
+          exit 1
+        fi
+        echo "✅ Repository structure is clean"
+
+    - name: Validate solution file
+      run: |
+        echo "🔍 Validating solution file references..."
+        if ! dotnet sln list | grep -E "src/(backend|shared)" > /dev/null; then
+          echo "❌ Solution file has incorrect project references"
+          exit 1
+        fi
+        echo "✅ Solution file is valid"
+
+  # Job 2: .NET Build and Test
+  build-and-test:
+    runs-on: ubuntu-latest
+    needs: validate-structure
+    name: Build and Test .NET Services
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+
+    - name: Cache NuGet packages
+      uses: actions/cache@v3
+      with:
+        path: ~/.nuget/packages
+        key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
+        restore-keys: |
+          ${{ runner.os }}-nuget-
+
+    - name: Restore dependencies
+      run: dotnet restore OjalaHealthcarePlatform.sln
+
+    - name: Build solution
+      run: dotnet build OjalaHealthcarePlatform.sln -c Release --no-restore
+
+    - name: Run unit tests
+      run: |
+        dotnet test OjalaHealthcarePlatform.sln \
+          --no-build \
+          --configuration Release \
+          --logger "trx;LogFileName=test-results.trx" \
+          --collect:"XPlat Code Coverage"
+
+    - name: Upload test results
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: test-results
+        path: |
+          **/test-results.trx
+          **/coverage.cobertura.xml
+
+  # Job 3: Docker Build and Security Scan
+  docker-build:
+    runs-on: ubuntu-latest
+    needs: build-and-test
+    name: Docker Build and Security Scan
+
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest]
-        dotnet-version: ["8.0.x"]
-    env:
-      DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
-      DOTNET_CLI_TELEMETRY_OPTOUT: true
+        service: [
+          'ojala-identity',
+          'ojala-api',
+          'ojala-healthscore',
+          'ojala-web'
+        ]
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+    - uses: actions/checkout@v4
 
-      - name: Setup .NET ${{ matrix.dotnet-version }}
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: ${{ matrix.dotnet-version }}
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
 
-      - name: Restore dependencies
-        run: dotnet restore OjalaHealthcarePlatform.sln
+    - name: Create .env file for build
+      run: |
+        cat > .env <<'EOF'
+        DB_CONNECTION_STRING=Host=localhost;Database=test;Username=test;Password=test
+        JWT_KEY=test_key_for_ci_build_only_not_secure
+        JWT_ISSUER=OjalaHealthcarePlatform
+        JWT_AUDIENCE=OjalaHealthcareClients
+        HEALTHSCORE_DB_CONN=Host=localhost;Database=test;Username=test;Password=test
+        AI_MODEL_PATH=/app/models/health-score-model.pkl
+        EOF
 
-      - name: Build
-        run: dotnet build OjalaHealthcarePlatform.sln --configuration Release --no-restore
+    - name: Build Docker image
+      run: |
+        docker compose build ${{ matrix.service }}
 
-      # Lint step (StyleCop) will go here once configured
-      # - name: Lint (.NET)
-      #   run: dotnet build --configuration Release /p:WarningsAsErrors=true
+    - name: Run Trivy vulnerability scanner
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: ${{ matrix.service }}:latest
+        format: 'sarif'
+        output: 'trivy-results.sarif'
 
-      - name: Test & Generate Coverage
-        run: dotnet test OjalaHealthcarePlatform.sln \
-          --configuration Release --no-build \
-          --logger "trx;LogFileName=backend-test-results.trx" \
-          --results-directory test-results/${{ matrix.os }} \
-          /p:CollectCoverage=true \
-          /p:CoverletOutputFormat=opencover \
-          /p:CoverletOutput=./coverage/backend.opencover.xml
+    - name: Upload Trivy scan results
+      uses: github/codeql-action/upload-sarif@v2
+      if: always()
+      with:
+        sarif_file: 'trivy-results.sarif'
 
-      - name: Upload Backend Test Results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: backend-test-results-${{ matrix.os }}
-          path: test-results/${{ matrix.os }}/backend-test-results.trx
-
-      - name: Upload Backend Coverage Report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: backend-coverage-report-${{ matrix.os }}
-          path: coverage/backend.opencover.xml
-
-  frontend-ci:
-    name: Frontend CI (Node.js)
+  # Job 4: Integration Tests
+  integration-tests:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        node-version: ["20.x"]
-    env:
-      REACT_APP_API_URL: http://localhost
-      CI: true
+    needs: docker-build
+    name: Integration Tests
 
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js ${{ matrix.node-version }}
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ matrix.node-version }}
-          cache: npm
-          cache-dependency-path: src/frontend/ojala.web/package-lock.json
-
-      - name: Install dependencies
-        working-directory: src/frontend/ojala.web
-        run: npm ci --legacy-peer-deps
-
-      - name: Lint (Frontend)
-        working-directory: src/frontend/ojala.web
-        run: npm run lint
-
-      - name: Test & Generate Coverage
-        working-directory: src/frontend/ojala.web
-        run: npm test -- --coverage --reporters=default --reporters=jest-junit --testResultsProcessor=jest-junit
-
-      - name: Upload Frontend Test Results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: frontend-test-results
-          path: src/frontend/ojala.web/junit.xml
-
-      - name: Upload Frontend Coverage
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: frontend-coverage-report
-          path: src/frontend/ojala.web/coverage
-
-      - name: Build Frontend
-        working-directory: src/frontend/ojala.web
-        run: npm run build
-
-      - name: Upload Frontend Build Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: frontend-build
-          path: src/frontend/ojala.web/build
-
-  codeql-analysis:
-    name: CodeQL Analysis
-    runs-on: ubuntu-latest
-    permissions:
-      actions: read
-      contents: read
-      security-events: write
-    strategy:
-      fail-fast: false
-      matrix:
-        language: [javascript, csharp]
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Initialize CodeQL
-        uses: github/codeql-action/init@v3
-        with:
-          languages: ${{ matrix.language }}
-
-      - name: Autobuild (C#)
-        if: matrix.language == 'csharp'
-        uses: github/codeql-action/autobuild@v3
-
-      - name: Setup Node.js for CodeQL (JS)
-        if: matrix.language == 'javascript'
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20.x'
-          cache: npm
-          cache-dependency-path: src/frontend/ojala.web/package-lock.json
-
-      - name: Install JS dependencies
-        if: matrix.language == 'javascript'
-        working-directory: src/frontend/ojala.web
-        run: npm ci --legacy-peer-deps
-
-      - name: Build JS for CodeQL
-        if: matrix.language == 'javascript'
-        working-directory: src/frontend/ojala.web
-        run: npm run build
-
-      - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@v3
-
-  build-push-api:
-    needs: backend-ci
-    runs-on: ubuntu-latest
-    outputs:
-      image_url: ${{ steps.build-push.outputs.image }}
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Login to Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
-
-      - name: Build and push API image
-        id: build-push
-        uses: docker/build-push-action@v5
-        with:
-          context: ./src/backend/Ojala.Api
-          push: true
-          tags: yourdockerhubuser/ojala-api:latest
-
-  build-push-identity:
-    needs: backend-ci
-    runs-on: ubuntu-latest
-    outputs:
-      image_url: ${{ steps.build-push.outputs.image }}
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Login to Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
-
-      - name: Build and push Identity image
-        id: build-push
-        uses: docker/build-push-action@v5
-        with:
-          context: ./src/backend/Ojala.Identity
-          push: true
-          tags: yourdockerhubuser/ojala-identity:latest
-
-  build-push-web:
-    needs: frontend-ci
-    runs-on: ubuntu-latest
-    outputs:
-      image_url: ${{ steps.build-push.outputs.image }}
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Login to Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
-
-      - name: Build and push Web image
-        id: build-push
-        uses: docker/build-push-action@v5
-        with:
-          context: ./src/frontend/ojala.web
-          push: true
-          tags: yourdockerhubuser/ojala-web:latest
-
-  terraform-plan:
-    needs: [build-push-api, build-push-identity, build-push-web]
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-
-      - name: Terraform Init
-        run: terraform init
-        working-directory: infra/terraform
-
-      - name: Terraform Validate
-        run: terraform validate
-        working-directory: infra/terraform
-
-      - name: Terraform Plan
-        run: terraform plan -out=tfplan
-        working-directory: infra/terraform
+    services:
+      postgres:
+        image: postgres:15
         env:
-          TF_VAR_ojala_api_image_url: ${{ needs.build-push-api.outputs.image_url }}
-          TF_VAR_ojala_identity_image_url: ${{ needs.build-push-identity.outputs.image_url }}
-          TF_VAR_ojala_web_image_url: ${{ needs.build-push-web.outputs.image_url }}
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: test_db
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
 
-      - name: Upload Terraform Plan
-        uses: actions/upload-artifact@v3
-        with:
-          name: terraform-plan
-          path: infra/terraform/tfplan
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Create test environment
+      run: |
+        cat > .env <<'EOF'
+        DB_CONNECTION_STRING=Host=localhost;Database=test_db;Username=test_user;Password=test_password
+        JWT_KEY=integration_test_key_32_characters_long
+        JWT_ISSUER=OjalaHealthcarePlatform
+        JWT_AUDIENCE=OjalaHealthcareClients
+        HEALTHSCORE_DB_CONN=Host=localhost;Database=test_db;Username=test_user;Password=test_password
+        AI_MODEL_PATH=/app/models/health-score-model.pkl
+        REDIS_CONNECTION_STRING=localhost:6379
+        EOF
+
+    - name: Start services
+      run: |
+        docker compose up -d --build
+        sleep 30  # Wait for services to be ready
+
+    - name: Run integration tests
+      run: |
+        # Test health endpoints
+        curl -f http://localhost:5001/health || exit 1
+        curl -f http://localhost:5000/health || exit 1
+        curl -f http://localhost:8083/health || exit 1
+
+    - name: Collect container logs
+      if: failure()
+      run: |
+        docker compose logs > container-logs.txt
+
+    - name: Upload logs
+      if: failure()
+      uses: actions/upload-artifact@v3
+      with:
+        name: container-logs
+        path: container-logs.txt
+
+    - name: Cleanup
+      if: always()
+      run: docker compose down -v
+
+  # Job 5: Security and Compliance
+  security-scan:
+    runs-on: ubuntu-latest
+    needs: validate-structure
+    name: Security and Compliance Scan
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Run GitLeaks
+      uses: gitleaks/gitleaks-action@v2
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Check for hardcoded secrets
+      run: |
+        echo "🔍 Scanning for hardcoded secrets..."
+        if grep -r "password.*=" --include="*.cs" --include="*.json" src/; then
+          echo "❌ Potential hardcoded secrets found"
+          exit 1
+        fi
+        echo "✅ No hardcoded secrets detected"
+
+    - name: Validate environment variables
+      run: |
+        echo "🔍 Validating environment variable usage..."
+        if grep -r "Environment.GetEnvironmentVariable" src/ | grep -v "??" | grep -v "default"; then
+          echo "⚠️ Environment variables without defaults found"
+        fi
+        echo "✅ Environment variable validation completed"
+
+  # Job 6: Deploy to Staging (on main branch)
+  deploy-staging:
+    runs-on: ubuntu-latest
+    needs: [build-and-test, docker-build, integration-tests, security-scan]
+    name: Deploy to Staging
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Deploy to staging
+      run: |
+        echo "🚀 Deploying to staging environment..."
+        echo "This would typically:"
+        echo "  - Push images to container registry"
+        echo "  - Update Kubernetes manifests"
+        echo "  - Apply database migrations"
+        echo "  - Run smoke tests against staging"
+        echo "✅ Staging deployment completed"

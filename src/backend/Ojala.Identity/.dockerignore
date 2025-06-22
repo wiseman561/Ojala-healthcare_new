@@ -2,6 +2,7 @@
 **
 
 # Allow solution and project files
+!Ojala.Identity.csproj
 !OjalaHealthcarePlatform.sln
 !Directory.Build.props
 !Directory.Packages.props
@@ -13,7 +14,6 @@
 # Allow backend projects
 !src/backend/Ojala.Data/Ojala.Data.csproj
 !src/backend/Ojala.Services/Ojala.Services.csproj
-!src/backend/Ojala.Identity/Ojala.Identity.csproj
 !src/backend/Ojala.Api/Ojala.Api.csproj
 
 # Allow source files for all projects
@@ -22,4 +22,4 @@
 !src/**/appsettings*.json
 
 # Allow Dockerfile
-!src/backend/Ojala.Identity/Dockerfile
+!Dockerfile

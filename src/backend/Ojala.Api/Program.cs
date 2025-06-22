@@ -59,9 +59,9 @@ if (vaultEnabled)
 
 // Add database context
 builder.Services.AddDbContext<Ojala.Data.ApplicationDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 builder.Services.AddDbContext<Ojala.Data.OjalaDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
 builder.Services.AddIdentity<Ojala.Data.Entities.ApplicationUser, IdentityRole>()
     .AddEntityFrameworkStores<Ojala.Data.ApplicationDbContext>()

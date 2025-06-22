@@ -1,0 +1,59 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: api-allow-identity
+  namespace: demo
+  annotations:
+    description: "Allows identity service to communicate with API service for auth operations"
+    hipaa.compliance: "164.312(a)(1)"
+spec:
+  podSelector:
+    matchLabels:
+      app: ojala-api
+      role: api
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: ojala-ns
+      podSelector:
+        matchLabels:
+          app: ojala-identity
+          role: identity
+    ports:
+    - protocol: TCP
+      port: 5000  # API container port
+    - protocol: TCP
+      port: 80    # Service port
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: identity-to-api-egress
+  namespace: ojala-ns
+  annotations:
+    description: "Allows identity service to initiate connections to API service"
+    hipaa.compliance: "164.312(a)(1)"
+spec:
+  podSelector:
+    matchLabels:
+      app: ojala-identity
+      role: identity
+  policyTypes:
+  - Egress
+  egress:
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: demo
+      podSelector:
+        matchLabels:
+          app: ojala-api
+          role: api
+    ports:
+    - protocol: TCP
+      port: 5000  # API container port
+    - protocol: TCP
+      port: 80    # Service port
