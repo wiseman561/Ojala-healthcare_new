@@ -4,6 +4,8 @@ WORKDIR /src
 # Copy solution-wide MSBuild files so restore works in containers
 COPY Directory.* ./
 COPY NuGet.Config ./
+# give MSBuild an empty fallback folder so it stops complaining
+RUN mkdir -p "/Program Files (x86)/Microsoft Visual Studio/Shared/NuGetPackages"
 # Disable all fallback folder mechanisms
 ENV NUGET_FALLBACK_PACKAGES=""
 ENV DOTNET_SKIP_FIRST_TIME_EXPERIENCE=1
