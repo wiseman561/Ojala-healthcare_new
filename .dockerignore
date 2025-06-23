@@ -1,6 +1,10 @@
 .git
-node_modules 
-**/bin 
-**/obj 
-*.user 
-*.suo
+node_modules
+**/bin
+/obj
+.user
+.suo
+src/frontend/
+docs/
+
+pgsql

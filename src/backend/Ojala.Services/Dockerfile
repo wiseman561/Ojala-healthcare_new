@@ -1,19 +1,13 @@
-## ---------- Build stage ----------
+# Build stage
 FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
 WORKDIR /src
-
-# Copy entire repo (single layer for cache coherency)
 COPY . .
-
-# Restore once for the whole solution; cache NuGet packages
 RUN --mount=type=cache,target=/root/.nuget/packages \
-    dotnet restore Ojala.sln
-
-# Publish the microservice --------------------------------
+    dotnet restore src/backend/Ojala.Services/Ojala.Services.csproj
 RUN dotnet publish src/backend/Ojala.Services/Ojala.Services.csproj \
       -c Release -o /app/publish
 
-## ---------- Runtime stage ----------
+# Runtime stage
 FROM mcr.microsoft.com/dotnet/aspnet:8.0
 WORKDIR /app
 COPY --from=build /app/publish .
