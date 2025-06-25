@@ -1,4 +1,4 @@
-FROM node:18-slim AS build
+FROM node:18-slim
 WORKDIR /app
 
 # Create non-root user
@@ -7,25 +7,10 @@ RUN groupadd --system appgroup && \
 
 # Copy package files and install dependencies
 COPY --chown=appuser:appgroup package*.json ./
-RUN npm ci
+RUN npm install --legacy-peer-deps
 
 # Copy source code
 COPY --chown=appuser:appgroup . .
-
-# Build the application
-RUN npm run build
-
-# Runtime stage
-FROM node:18-slim AS runtime
-WORKDIR /app
-
-# Create non-root user
-RUN groupadd --system appgroup && \
-    useradd --system --gid appgroup --shell /bin/bash appuser
-
-# Copy built application
-COPY --chown=appuser:appgroup --from=build /app/node_modules ./node_modules
-COPY --chown=appuser:appgroup --from=build /app/package*.json ./
 
 USER appuser
 

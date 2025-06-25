@@ -9,7 +9,7 @@ using Microsoft.Extensions.Hosting;
 
 // your data & identity models
 using Ojala.Data;                      // OjalaDbContext & ApplicationUser
-using Ojala.Data.Entities;             // ApplicationUser
+// using Ojala.Data.Entities;             // ApplicationUser - removed due to namespace conflict
 using Ojala.Data.Repositories;         // for LoginOtpRepository
 using Ojala.Data.Repositories.Interfaces;  // for ILoginOtpRepository
 
@@ -38,8 +38,12 @@ namespace Ojala.Identity
             services.AddDbContext<OjalaDbContext>(opts =>
                 opts.UseNpgsql(Configuration.GetConnectionString("DefaultConnection"))
             );
+            services.AddDbContext<Ojala.Data.ApplicationDbContext>(opts =>
+                opts.UseNpgsql(Configuration.GetConnectionString("DefaultConnection"))
+            );
 
-            services.AddIdentity<ApplicationUser, IdentityRole>(options =>
+
+            services.AddIdentity<Ojala.Data.Entities.ApplicationUser, IdentityRole>(options =>
             {
                 // tweak password / lockout rules here if you like
                 options.Password.RequireDigit = true;
@@ -62,6 +66,7 @@ namespace Ojala.Identity
             services.AddScoped<IAuthService, AuthService>();
             services.AddScoped<ITokenService, TokenService>();
             services.AddScoped<IUserProfileRepository, UserProfileRepository>();
+            services.AddScoped<ILoginOtpRepository, LoginOtpRepository>();
 
             // 4) CORS
             services.AddCors(opts =>

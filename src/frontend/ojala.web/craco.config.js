@@ -7,16 +7,20 @@ module.exports = {
   },
   webpack: {
     configure: (config) => {
-      // Patch for fullySpecified loader issue
+      // Fix for fullySpecified loader issue with MUI and other ES modules
       config.module.rules.forEach((rule) => {
         if (rule.oneOf) {
           rule.oneOf.forEach((oneOf) => {
-            if (oneOf.test && oneOf.test.toString().includes("js")) {
-              oneOf.resolve = { fullySpecified: false };
+            if (oneOf.resolve) {
+              oneOf.resolve.fullySpecified = false;
             }
           });
         }
       });
+
+      // Additional fix for module resolution
+      config.resolve.fullySpecified = false;
+
       return config;
     },
   },

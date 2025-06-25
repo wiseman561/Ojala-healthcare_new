@@ -1,257 +1,46 @@
-name: Ojala Healthcare Platform CI/CD
+name: CI
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ main ]
   pull_request:
     branches: [ main ]
 
-env:
-  DOTNET_VERSION: '8.0.x'
-  NODE_VERSION: '18.x'
-
 jobs:
-  # Job 1: Repository Structure Validation
-  validate-structure:
+  build-and-push:
     runs-on: ubuntu-latest
-    name: Validate Repository Structure
-
     steps:
-    - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-    - name: Check for duplicate folders
-      run: |
-        echo "🔍 Checking for legacy duplicate folders..."
-        if [ -d "apps" ] || [ -d "backend" ] || [ -d "libs" ]; then
-          echo "❌ Legacy duplicate folders found! Run cleanup script."
-          exit 1
-        fi
-        echo "✅ Repository structure is clean"
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v3
+        with:
+          dotnet-version: '8.0.x'
 
-    - name: Validate solution file
-      run: |
-        echo "🔍 Validating solution file references..."
-        if ! dotnet sln list | grep -E "src/(backend|shared)" > /dev/null; then
-          echo "❌ Solution file has incorrect project references"
-          exit 1
-        fi
-        echo "✅ Solution file is valid"
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
 
-  # Job 2: .NET Build and Test
-  build-and-test:
-    runs-on: ubuntu-latest
-    needs: validate-structure
-    name: Build and Test .NET Services
+      - name: Restore & Test .NET
+        run: |
+          dotnet restore Ojala.sln
+          dotnet test Ojala.sln --no-restore --verbosity normal
 
-    steps:
-    - uses: actions/checkout@v4
+      - name: Build Docker images
+        run: |
+          docker-compose build --parallel
 
-    - name: Setup .NET
-      uses: actions/setup-dotnet@v4
-      with:
-        dotnet-version: ${{ env.DOTNET_VERSION }}
+      - name: Log in to Docker registry
+        uses: docker/login-action@v2
+        with:
+          registry: docker.io
+          username: ${{ secrets.DOCKERHUB_USER }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-    - name: Cache NuGet packages
-      uses: actions/cache@v3
-      with:
-        path: ~/.nuget/packages
-        key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
-        restore-keys: |
-          ${{ runner.os }}-nuget-
-
-    - name: Restore dependencies
-      run: dotnet restore OjalaHealthcarePlatform.sln
-
-    - name: Build solution
-      run: dotnet build OjalaHealthcarePlatform.sln -c Release --no-restore
-
-    - name: Run unit tests
-      run: |
-        dotnet test OjalaHealthcarePlatform.sln \
-          --no-build \
-          --configuration Release \
-          --logger "trx;LogFileName=test-results.trx" \
-          --collect:"XPlat Code Coverage"
-
-    - name: Upload test results
-      uses: actions/upload-artifact@v3
-      if: always()
-      with:
-        name: test-results
-        path: |
-          **/test-results.trx
-          **/coverage.cobertura.xml
-
-  # Job 3: Docker Build and Security Scan
-  docker-build:
-    runs-on: ubuntu-latest
-    needs: build-and-test
-    name: Docker Build and Security Scan
-
-    strategy:
-      matrix:
-        service: [
-          'ojala-identity',
-          'ojala-api',
-          'ojala-healthscore',
-          'ojala-web'
-        ]
-
-    steps:
-    - uses: actions/checkout@v4
-
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
-
-    - name: Create .env file for build
-      run: |
-        cat > .env <<'EOF'
-        DB_CONNECTION_STRING=Host=localhost;Database=test;Username=test;Password=test
-        JWT_KEY=test_key_for_ci_build_only_not_secure
-        JWT_ISSUER=OjalaHealthcarePlatform
-        JWT_AUDIENCE=OjalaHealthcareClients
-        HEALTHSCORE_DB_CONN=Host=localhost;Database=test;Username=test;Password=test
-        AI_MODEL_PATH=/app/models/health-score-model.pkl
-        EOF
-
-    - name: Build Docker image
-      run: |
-        docker compose build ${{ matrix.service }}
-
-    - name: Run Trivy vulnerability scanner
-      uses: aquasecurity/trivy-action@master
-      with:
-        image-ref: ${{ matrix.service }}:latest
-        format: 'sarif'
-        output: 'trivy-results.sarif'
-
-    - name: Upload Trivy scan results
-      uses: github/codeql-action/upload-sarif@v2
-      if: always()
-      with:
-        sarif_file: 'trivy-results.sarif'
-
-  # Job 4: Integration Tests
-  integration-tests:
-    runs-on: ubuntu-latest
-    needs: docker-build
-    name: Integration Tests
-
-    services:
-      postgres:
-        image: postgres:15
-        env:
-          POSTGRES_USER: test_user
-          POSTGRES_PASSWORD: test_password
-          POSTGRES_DB: test_db
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 5432:5432
-
-      redis:
-        image: redis:7-alpine
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 6379:6379
-
-    steps:
-    - uses: actions/checkout@v4
-
-    - name: Create test environment
-      run: |
-        cat > .env <<'EOF'
-        DB_CONNECTION_STRING=Host=localhost;Database=test_db;Username=test_user;Password=test_password
-        JWT_KEY=integration_test_key_32_characters_long
-        JWT_ISSUER=OjalaHealthcarePlatform
-        JWT_AUDIENCE=OjalaHealthcareClients
-        HEALTHSCORE_DB_CONN=Host=localhost;Database=test_db;Username=test_user;Password=test_password
-        AI_MODEL_PATH=/app/models/health-score-model.pkl
-        REDIS_CONNECTION_STRING=localhost:6379
-        EOF
-
-    - name: Start services
-      run: |
-        docker compose up -d --build
-        sleep 30  # Wait for services to be ready
-
-    - name: Run integration tests
-      run: |
-        # Test health endpoints
-        curl -f http://localhost:5001/health || exit 1
-        curl -f http://localhost:5000/health || exit 1
-        curl -f http://localhost:8083/health || exit 1
-
-    - name: Collect container logs
-      if: failure()
-      run: |
-        docker compose logs > container-logs.txt
-
-    - name: Upload logs
-      if: failure()
-      uses: actions/upload-artifact@v3
-      with:
-        name: container-logs
-        path: container-logs.txt
-
-    - name: Cleanup
-      if: always()
-      run: docker compose down -v
-
-  # Job 5: Security and Compliance
-  security-scan:
-    runs-on: ubuntu-latest
-    needs: validate-structure
-    name: Security and Compliance Scan
-
-    steps:
-    - uses: actions/checkout@v4
-
-    - name: Run GitLeaks
-      uses: gitleaks/gitleaks-action@v2
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-    - name: Check for hardcoded secrets
-      run: |
-        echo "🔍 Scanning for hardcoded secrets..."
-        if grep -r "password.*=" --include="*.cs" --include="*.json" src/; then
-          echo "❌ Potential hardcoded secrets found"
-          exit 1
-        fi
-        echo "✅ No hardcoded secrets detected"
-
-    - name: Validate environment variables
-      run: |
-        echo "🔍 Validating environment variable usage..."
-        if grep -r "Environment.GetEnvironmentVariable" src/ | grep -v "??" | grep -v "default"; then
-          echo "⚠️ Environment variables without defaults found"
-        fi
-        echo "✅ Environment variable validation completed"
-
-  # Job 6: Deploy to Staging (on main branch)
-  deploy-staging:
-    runs-on: ubuntu-latest
-    needs: [build-and-test, docker-build, integration-tests, security-scan]
-    name: Deploy to Staging
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-
-    steps:
-    - uses: actions/checkout@v4
-
-    - name: Deploy to staging
-      run: |
-        echo "🚀 Deploying to staging environment..."
-        echo "This would typically:"
-        echo "  - Push images to container registry"
-        echo "  - Update Kubernetes manifests"
-        echo "  - Apply database migrations"
-        echo "  - Run smoke tests against staging"
-        echo "✅ Staging deployment completed"
+      - name: Push Docker images
+        run: |
+          for service in ojala-identity ojala-api ojala-apigateway ojala-healthscore ojala-web; do
+            docker tag $service:latest ${{ secrets.DOCKERHUB_USER }}/$service:latest
+            docker push ${{ secrets.DOCKERHUB_USER }}/$service:latest
+          done

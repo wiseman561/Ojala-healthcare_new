@@ -11,7 +11,7 @@ RUN groupadd --system appgroup && \
 COPY src/backend/Ojala.TelemetryProcessor/package*.json ./
 
 # Install dependencies
-RUN npm ci
+RUN npm install --legacy-peer-deps
 
 # Copy only the rest of the source after dependencies are installed
 COPY src/backend/Ojala.TelemetryProcessor/ ./

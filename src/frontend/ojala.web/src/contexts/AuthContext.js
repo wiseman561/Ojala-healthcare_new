@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import axios from 'axios';
-import jwt_decode from 'jwt-decode';
+import { jwtDecode } from 'jwt-decode';
 
 // Point Axios to your backend
 axios.defaults.baseURL = process.env.REACT_APP_API_URL || 'https://localhost:59478';
@@ -23,7 +23,7 @@ export const AuthProvider = ({ children }) => {
       if (token) {
         try {
           // Decode token to verify expiration
-          const decoded = jwt_decode(token);
+          const decoded = jwtDecode(token);
           const now = Date.now() / 1000;
           if (decoded.exp < now) {
             // Token expired

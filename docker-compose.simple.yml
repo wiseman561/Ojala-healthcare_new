@@ -1,0 +1,140 @@
+services:
+  ojala-db:
+    image: postgres:15
+    container_name: ojala-db
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=ojala_user
+      - POSTGRES_PASSWORD=superSecure123
+      - POSTGRES_DB=OjalaHealthcare
+    volumes:
+      - ojala-db-data:/var/lib/postgresql/data
+    networks:
+      - ojala-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ojala_user -d OjalaHealthcare"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  ojala-redis:
+    image: redis:7-alpine
+    container_name: ojala-redis
+    ports:
+      - "6379:6379"
+    networks:
+      - ojala-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  influxdb:
+    image: influxdb:2.6
+    container_name: ojala-influxdb
+    ports:
+      - "8086:8086"
+    environment:
+      - DOCKER_INFLUXDB_INIT_MODE=setup
+      - DOCKER_INFLUXDB_INIT_USERNAME=ojala
+      - DOCKER_INFLUXDB_INIT_PASSWORD=ojala-password
+      - DOCKER_INFLUXDB_INIT_ORG=ojala
+      - DOCKER_INFLUXDB_INIT_BUCKET=ojala_telemetry
+      - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=ojala-influxdb-token
+    volumes:
+      - influxdb_data:/var/lib/influxdb2
+    networks:
+      - ojala-network
+
+  ojala-identity:
+    build:
+      context: .
+      dockerfile: src/backend/Ojala.Identity/Dockerfile
+    container_name: ojala-identity
+    ports:
+      - "5001:80"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:80
+      - ConnectionStrings__DefaultConnection=Host=ojala-db;Database=OjalaHealthcare;Username=ojala_user;Password=superSecure123
+      - Jwt__Key=_32_byte_or_longer_random_string_for_production_use_
+      - Jwt__Issuer=OjalaHealthcarePlatform
+      - Jwt__Audience=OjalaHealthcareClients
+    depends_on:
+      ojala-db:
+        condition: service_healthy
+    networks:
+      - ojala-network
+
+  ojala-api:
+    build:
+      context: .
+      dockerfile: src/backend/Ojala.Api/Dockerfile
+    container_name: ojala-api
+    ports:
+      - "5000:80"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:80
+      - ConnectionStrings__DefaultConnection=Host=ojala-db;Database=OjalaHealthcare;Username=ojala_user;Password=superSecure123
+      - IdentityServer__Authority=http://ojala-identity
+      - Redis__ConnectionString=ojala-redis:6379
+      - Jwt__Key=_32_byte_or_longer_random_string_for_production_use_
+      - Jwt__Issuer=OjalaHealthcarePlatform
+      - Jwt__Audience=OjalaHealthcareClients
+    depends_on:
+      ojala-identity:
+        condition: service_started
+      ojala-db:
+        condition: service_healthy
+      ojala-redis:
+        condition: service_healthy
+    networks:
+      - ojala-network
+
+  ojala-apigateway:
+    build:
+      context: .
+      dockerfile: src/backend/Ojala.ApiGateway/Dockerfile
+    container_name: ojala-apigateway
+    ports:
+      - "5003:80"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:80
+      - ConnectionStrings__DefaultConnection=Host=ojala-db;Database=OjalaHealthcare;Username=ojala_user;Password=superSecure123
+      - JWT_SETTINGS__AUTHORITY=http://ojala-identity
+      - JWT_SETTINGS__AUDIENCE=OjalaHealthcareClients
+    depends_on:
+      - ojala-api
+      - ojala-identity
+    networks:
+      - ojala-network
+
+  ojala-healthscore:
+    build:
+      context: .
+      dockerfile: src/backend/Ojala.HealthScore/Dockerfile
+    container_name: ojala-healthscore
+    ports:
+      - "8083:80"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:80
+      - HEALTHSCORE_DB_CONN=Host=ojala-db;Database=OjalaHealthcare;Username=ojala_user;Password=superSecure123
+      - AI_MODEL_PATH=/app/models/health-score-model.pkl
+    depends_on:
+      ojala-db:
+        condition: service_healthy
+    networks:
+      - ojala-network
+
+networks:
+  ojala-network:
+    driver: bridge
+
+volumes:
+  ojala-db-data:
+  influxdb_data:

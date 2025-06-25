@@ -8,7 +8,7 @@ WORKDIR /app
 COPY src/frontend/patient-app/package*.json ./
 
 # Install dependencies
-RUN npm ci
+RUN npm install --legacy-peer-deps
 
 # Copy all files
 COPY src/frontend/patient-app/ .

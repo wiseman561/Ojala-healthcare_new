@@ -4,7 +4,7 @@
 		<TargetFramework>net8.0</TargetFramework>
 		<Nullable>enable</Nullable>
 		<ImplicitUsings>enable</ImplicitUsings>
-		<DisableImplicitNuGetFallbackFolder>true</DisableImplicitNuGetFallbackFolder>
+
 		<ProjectGuid>{A12E34BC-5678-1234-ABCD-7890EF123456}</ProjectGuid>
 	</PropertyGroup>
 

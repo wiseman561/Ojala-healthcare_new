@@ -1,5 +1,4 @@
-services:
-  # Vault Server (for local development)
+﻿services:
   vault:
     image: hashicorp/vault:1.15.2
     container_name: ojala-vault
@@ -21,7 +20,6 @@ services:
     networks:
       - ojala-network
 
-  # Vault Agent for Ojala API
   vault-agent-ojala-api:
     build:
       context: ./vault
@@ -32,13 +30,14 @@ services:
         condition: service_healthy
     environment:
       - VAULT_ADDR=http://vault:8200
+      - VAULT_TOKEN=root
     volumes:
       - ojala-secrets:/vault/secrets
       - ./vault/role-id:/vault/config/role-id:ro
       - ./vault/secret-id:/vault/config/secret-id:ro
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "test", "-f", "/vault/secrets/jwt-secret.json"]
+      test: ["CMD", "test", "-f", "/vault/secrets/appsettings.json"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -46,7 +45,20 @@ services:
     networks:
       - ojala-network
 
-  # Ojala API with Vault integration
+  ojala-db:
+    image: postgres:15
+    container_name: ojala-db
+    environment:
+      - POSTGRES_DB=ojala
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=yourpassword
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - ojala-network
+
   ojala-api:
     build:
       context: .
@@ -57,9 +69,12 @@ services:
     depends_on:
       vault-agent-ojala-api:
         condition: service_healthy
+      ojala-db:
+        condition: service_started
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ASPNETCORE_URLS=http://+:80
+      - VAULT_ADDR=http://vault:8200
     volumes:
       - ojala-secrets:/vault/secrets:ro
     restart: unless-stopped
@@ -73,16 +88,100 @@ services:
       - ojala-network
     command: >
       sh -c "
-        echo 'Waiting for JWT secret file...' &&
-        while [ ! -f /vault/secrets/jwt-secret.json ]; do
+        echo 'Waiting for Vault secrets file...' &&
+        while [ ! -f /vault/secrets/appsettings.json ]; do
           sleep 2;
         done &&
-        echo 'JWT secret file found, starting application...' &&
+        echo 'Vault secrets file found, starting application...' &&
         dotnet Ojala.Api.dll
       "
 
+  ojala-identity:
+    build:
+      context: .
+      dockerfile: src/backend/Ojala.Identity/Dockerfile
+    container_name: ojala-identity
+    ports:
+      - "5001:80"
+    depends_on:
+      ojala-db:
+        condition: service_started
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:80
+      - JwtSettings__SecretKey=YOUR_SUPER_SECRET_KEY_HERE_THAT_IS_AT_LEAST_32_CHARACTERS_LONG
+      - JwtSettings__Issuer=Ojala.Identity
+      - JwtSettings__Audience=Ojala.Client
+      - JwtSettings__ExpiryInMinutes=60
+      - ConnectionStrings__DefaultConnection=Host=ojala-db;Port=5432;Database=ojala;Username=postgres;Password=yourpassword
+    restart: unless-stopped
+    networks:
+      - ojala-network
+
+  ojala-healthscore:
+    build:
+      context: .
+      dockerfile: src/backend/Ojala.HealthScore/Dockerfile
+    container_name: ojala-healthscore
+    ports:
+      - "5004:80"
+    depends_on:
+      ojala-db:
+        condition: service_started
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:80
+      - JwtSettings__SecretKey=YOUR_SUPER_SECRET_KEY_HERE_THAT_IS_AT_LEAST_32_CHARACTERS_LONG
+      - JwtSettings__Issuer=Ojala.Identity
+      - JwtSettings__Audience=Ojala.Client
+      - JwtSettings__ExpiryInMinutes=60
+      - ConnectionStrings__DefaultConnection=Host=ojala-db;Port=5432;Database=ojala;Username=postgres;Password=yourpassword
+    restart: unless-stopped
+    networks:
+      - ojala-network
+
+  ojala-apigateway:
+    build:
+      context: .
+      dockerfile: src/backend/Ojala.ApiGateway/Dockerfile
+    container_name: ojala-apigateway
+    ports:
+      - "5002:80"
+    depends_on:
+      - ojala-api
+      - ojala-identity
+      - ojala-healthscore
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:80
+      - JwtSettings__Authority=http://localhost:5001
+      - JwtSettings__Issuer=Ojala.Identity
+      - JwtSettings__Audience=Ojala.Client
+      - JwtSettings__SecretKey=YOUR_SUPER_SECRET_KEY_HERE_THAT_IS_AT_LEAST_32_CHARACTERS_LONG
+      - JwtSettings__ExpiryInMinutes=60
+    restart: unless-stopped
+    networks:
+      - ojala-network
+
+  ojala-web:
+    build:
+      context: ./src/frontend/ojala.web
+      dockerfile: Dockerfile
+    container_name: ojala-web
+    ports:
+      - "3000:80"
+    depends_on:
+      - ojala-apigateway
+    environment:
+      - REACT_APP_API_URL=http://localhost:5002
+    restart: unless-stopped
+    networks:
+      - ojala-network
+
 volumes:
   ojala-secrets:
+    driver: local
+  postgres_data:
     driver: local
 
 networks:

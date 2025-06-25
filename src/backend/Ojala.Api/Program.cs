@@ -35,7 +35,7 @@ if (vaultEnabled)
     var isKubernetes = !string.IsNullOrEmpty(kubernetesServiceHost);
 
     // Use Vault-provided configuration if available
-    var vaultSecretsPath = "/vault/secrets/appsettings.secrets.json";
+    var vaultSecretsPath = "/vault/secrets/appsettings.json";
     if (File.Exists(vaultSecretsPath))
     {
         builder.Configuration.AddJsonFile(vaultSecretsPath, optional: false, reloadOnChange: true);
@@ -105,6 +105,7 @@ builder.Services.AddScoped<Ojala.Services.Interfaces.IHealthcarePlanService, Oja
 // Add 2FA services
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<ILoginOtpRepository, LoginOtpRepository>();
+builder.Services.AddScoped<IUserProfileRepository, UserProfileRepository>();
 builder.Services.AddScoped<Ojala.Common.Email.IEmailService, Ojala.Common.Email.EmailService>();
 builder.Services.AddScoped<Ojala.Identity.Services.Interfaces.IEmailService, Ojala.Identity.Services.EmailService>();
 
@@ -120,10 +121,11 @@ builder.Services.AddScoped<Ojala.Identity.Services.Interfaces.ITokenService, Oja
 var app = builder.Build();
 
 // Apply database migrations in development
-if (app.Environment.IsDevelopment())
-{
-    app.MigrateDatabase();
-}
+// Temporarily disabled to avoid migration issues during Docker build
+// if (app.Environment.IsDevelopment())
+// {
+//     app.MigrateDatabase();
+// }
 
 // Configure HTTP pipeline
 if (app.Environment.IsDevelopment())

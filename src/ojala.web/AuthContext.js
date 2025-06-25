@@ -1,5 +1,5 @@
 import React, { createContext, useState, useEffect } from 'react';
-import { jwtDecode } from 'jwt-decode'; // Need to install jwt-decode
+import { jwtDecode } from 'jwt-decode';
 
 const AuthContext = createContext(null);
 
@@ -13,7 +13,7 @@ export const AuthProvider = ({ children }) => {
       try {
         const decoded = jwtDecode(token);
         // TODO: Add token expiration check
-        setUser({ 
+        setUser({
           id: decoded.sub, // Assuming 'sub' claim holds user ID
           email: decoded.email, // Assuming 'email' claim
           roles: decoded.role || [] // Assuming 'role' claim holds roles (string or array)

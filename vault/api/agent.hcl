@@ -17,7 +17,7 @@ auto_auth {
 }
 
 template {
-  source      = "/vault/config/secrets.tmpl"
+  source      = "/vault/config/templates/secrets.tmpl"
   destination = "/vault/secrets/appsettings.json"
 }
 

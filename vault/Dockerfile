@@ -9,6 +9,9 @@ COPY vault-agent.hcl /vault/config/
 # Copy template files
 COPY templates/ /vault/config/templates/
 
+# Create token file
+RUN echo "root" > /vault/config/token
+
 # Set proper permissions
 RUN chmod 644 /vault/config/vault-agent.hcl && \
     chmod 644 /vault/config/templates/* && \
