@@ -31,9 +31,15 @@ jobs:
         with:
           languages: ${{ matrix.language }}
 
-      - name: Autobuild (C#)
+      - name: Setup .NET for CodeQL
         if: matrix.language == 'csharp'
-        uses: github/codeql-action/autobuild@v3
+        uses: actions/setup-dotnet@v3
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Build .NET solution for CodeQL
+        if: matrix.language == 'csharp'
+        run: dotnet build Ojala.sln --no-restore --configuration Release
 
       - name: Setup Node.js for CodeQL
         if: matrix.language == 'javascript'
