@@ -6,21 +6,21 @@ on:
   pull_request:
     branches: [ main ]
   schedule:
-    - cron: '0 0 * * 0'  # Weekly on Sundays
+    - cron: '0 0 * * 0'  # weekly
 
 jobs:
   analyze:
-    name: Analyze with CodeQL
+    name: Analyze with CodeQL (${{ matrix.language }})
     runs-on: ubuntu-latest
     permissions:
-      actions: read
       contents: read
       security-events: write
+      actions: read
 
     strategy:
       fail-fast: false
       matrix:
-        language: [ javascript, csharp ]
+        language: [ csharp, javascript ]
 
     steps:
       - name: Checkout repository
@@ -31,34 +31,46 @@ jobs:
         with:
           languages: ${{ matrix.language }}
 
-      - name: Setup .NET for CodeQL
+      # -------------------
+      # .NET (C#) build
+      # -------------------
+      - name: Setup .NET SDK
         if: matrix.language == 'csharp'
         uses: actions/setup-dotnet@v3
         with:
-          dotnet-version: '8.0.x'
+          dotnet-version: 8.0.x
 
-      - name: Restore .NET packages
+      - name: Restore .NET dependencies
         if: matrix.language == 'csharp'
         run: dotnet restore Ojala.sln
 
       - name: Build .NET solution
         if: matrix.language == 'csharp'
-        run: dotnet build Ojala.sln --no-restore --configuration Release
+        run: dotnet build Ojala.sln --configuration Release --no-restore
 
-      - name: Setup Node.js for CodeQL
+      # -------------------
+      # JavaScript build
+      # -------------------
+      - name: Setup Node.js
         if: matrix.language == 'javascript'
         uses: actions/setup-node@v4
         with:
-          node-version: '20.x'
-          cache: 'npm'
-          cache-dependency-path: src/frontend/ojala.web/package.json
+          node-version: '18.x'
+          cache: npm
+          cache-dependency-path: src/frontend/ojala.web/package-lock.json
 
       - name: Install JS dependencies
         if: matrix.language == 'javascript'
         working-directory: src/frontend/ojala.web
         run: npm install --legacy-peer-deps
 
-      # -- Removed the `npm run build` step because it fails on ajv --
+      - name: Build JS for CodeQL
+        if: matrix.language == 'javascript'
+        working-directory: src/frontend/ojala.web
+        run: npm run build
 
+      # -------------------
+      # Run the analysis
+      # -------------------
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v3
