@@ -7,6 +7,7 @@ on:
     branches: [ main ]
   schedule:
     - cron: '0 2 * * *'  # Daily at 02:00 UTC
+  workflow_dispatch:
 
 permissions:
   security-events: write
@@ -18,9 +19,6 @@ jobs:
     name: CodeQL Scan
     runs-on: ubuntu-latest
     timeout-minutes: 360
-    concurrency:
-      group: codeql-${{ github.ref }}
-      cancel-in-progress: true
 
     strategy:
       fail-fast: false
@@ -30,21 +28,19 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       # ──────────────── CACHING ───────────────────
-      - name: Cache NuGet
+      - name: Cache NuGet packages
         if: matrix.language == 'csharp'
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: ~/.nuget/packages
           key: nuget-${{ hashFiles('**/*.csproj') }}
           restore-keys: nuget-
 
-      - name: Cache npm
+      - name: Cache npm packages
         if: matrix.language == 'javascript'
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: |
             **/node_modules
@@ -52,9 +48,9 @@ jobs:
           key: npm-${{ hashFiles('**/package-lock.json') }}
           restore-keys: npm-
 
-      - name: Cache pip
+      - name: Cache pip packages
         if: matrix.language == 'python'
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: ~/.cache/pip
           key: pip-${{ hashFiles('**/requirements.txt') }}
@@ -75,7 +71,7 @@ jobs:
 
       - name: Setup Python 3.11
         if: matrix.language == 'python'
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
@@ -92,35 +88,33 @@ jobs:
           dotnet restore Ojala.sln --verbosity minimal
           dotnet build Ojala.sln --configuration Release --no-restore --verbosity minimal
 
-      - name: Build all JS projects
+      - name: Build JavaScript projects
         if: matrix.language == 'javascript'
         run: |
+          # Build frontend applications
           for app in ojala.web employer-dashboard patient-app rn-dashboard; do
             dir="src/frontend/$app"
             if [ -f "$dir/package.json" ]; then
               echo "→ Building $app"
-              (cd "$dir" && npm ci --legacy-peer-deps || npm install --legacy-peer-deps)
-              (cd "$dir" && npm run build || echo "⚠️ $app build failed, continuing")
+              (cd "$dir" && (npm ci --legacy-peer-deps || npm install --legacy-peer-deps))
+              (cd "$dir" && (npm run build || echo "⚠️ $app build failed, continuing"))
             fi
           done
+
+          # Build Node.js backend services
           dir="src/backend/Ojala.AlertsStreamer"
           if [ -f "$dir/package.json" ]; then
             echo "→ Building AlertsStreamer"
-            (cd "$dir" && npm ci || npm install)
-            (cd "$dir" && npm run build --if-present || echo "⚠️ no build script")
+            (cd "$dir" && (npm ci || npm install))
+            (cd "$dir" && (npm run build --if-present || echo "⚠️ no build script"))
           fi
 
-      - name: Autobuild Python
+      - name: Autobuild Python projects
         if: matrix.language == 'python'
         uses: github/codeql-action/autobuild@v3
 
-      # ─────────── RUN & UPLOAD ───────────────
+      # ─────────── RUN ANALYSIS ───────────────
       - name: Run CodeQL Analysis
         uses: github/codeql-action/analyze@v3
         with:
-          output: results
-
-      - name: Upload SARIF results
-        uses: github/codeql-action/upload-sarif@v3
-        with:
-          sarif_file: results/codeql-results.sarif
+          category: "/language:${{matrix.language}}"

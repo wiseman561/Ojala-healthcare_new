@@ -5,42 +5,127 @@ on:
     branches: [ main ]
   pull_request:
     branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
 
 jobs:
-  build-and-push:
+  build-and-test:
+    name: Build & Test
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
+    timeout-minutes: 30
 
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v3
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ──────────────────────────────────────────────────────────────
+      # CACHING
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ hashFiles('**/*.csproj') }}
+          restore-keys: nuget-
+
+      - name: Cache npm packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            **/node_modules
+            ~/.npm
+          key: npm-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: npm-
+
+      # ──────────────────────────────────────────────────────────────
+      # SETUP ENVIRONMENTS
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
 
-      - name: Setup Node.js
+      - name: Setup Node.js 18
         uses: actions/setup-node@v4
         with:
           node-version: '18'
 
-      - name: Restore & Test .NET
-        run: |
-          dotnet restore Ojala.sln
-          dotnet test Ojala.sln --no-restore --verbosity normal
+      # ──────────────────────────────────────────────────────────────
+      # BUILD & TEST
+      - name: Restore .NET dependencies
+        run: dotnet restore Ojala.sln --verbosity minimal
 
-      - name: Build Docker images
-        run: |
-          docker-compose build --parallel
+      - name: Build .NET solution
+        run: dotnet build Ojala.sln --configuration Release --no-restore --verbosity minimal
 
-      - name: Log in to Docker registry
-        uses: docker/login-action@v2
+      - name: Run .NET tests
+        run: dotnet test Ojala.sln --configuration Release --no-build --verbosity normal --collect:"XPlat Code Coverage"
+
+      - name: Install frontend dependencies
+        run: |
+          # Install dependencies for all frontend apps
+          for app in ojala.web employer-dashboard patient-app rn-dashboard; do
+            dir="src/frontend/$app"
+            if [ -f "$dir/package.json" ]; then
+              echo "Installing dependencies for $app"
+              (cd "$dir" && npm ci --legacy-peer-deps || npm install --legacy-peer-deps)
+            fi
+          done
+
+      - name: Build frontend applications
+        run: |
+          # Build all frontend apps
+          for app in ojala.web employer-dashboard patient-app rn-dashboard; do
+            dir="src/frontend/$app"
+            if [ -f "$dir/package.json" ]; then
+              echo "Building $app"
+              (cd "$dir" && npm run build)
+            fi
+          done
+
+      # ──────────────────────────────────────────────────────────────
+      # DOCKER BUILD & PUSH
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: docker/login-action@v3
         with:
-          registry: docker.io
           username: ${{ secrets.DOCKERHUB_USER }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Push Docker images
+      - name: Build Docker images
         run: |
-          for service in ojala-identity ojala-api ojala-apigateway ojala-healthscore ojala-web; do
-            docker tag $service:latest ${{ secrets.DOCKERHUB_USER }}/$service:latest
-            docker push ${{ secrets.DOCKERHUB_USER }}/$service:latest
+          if [ -f "docker-compose.yml" ]; then
+            docker-compose build --parallel
+          else
+            echo "No docker-compose.yml found, skipping Docker build"
+          fi
+
+      - name: Push Docker images
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          services="ojala-identity ojala-api ojala-apigateway ojala-healthscore ojala-web"
+          for service in $services; do
+            if docker image inspect "$service:latest" >/dev/null 2>&1; then
+              docker tag "$service:latest" "${{ secrets.DOCKERHUB_USER }}/$service:latest"
+              docker push "${{ secrets.DOCKERHUB_USER }}/$service:latest"
+              echo "✓ Pushed $service"
+            else
+              echo "⚠️ Image $service:latest not found, skipping"
+            fi
           done
+
+      # ──────────────────────────────────────────────────────────────
+      # UPLOAD ARTIFACTS
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: |
+            **/TestResults/**/*.xml
+            **/coverage.cobertura.xml
+          retention-days: 30

@@ -1,26 +1,102 @@
-name: Deploy Kubernetes Resources
+name: Deploy to Kubernetes
 
 on:
   push:
-    branches:
-      - ci-workflows
+    branches: [ main ]
   workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+        - staging
+        - production
+
+permissions:
+  contents: read
+  actions: read
 
 jobs:
   deploy:
+    name: Deploy to K8s
     runs-on: ubuntu-latest
-    
+    timeout-minutes: 20
+    environment: ${{ inputs.environment || 'staging' }}
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        
-      - name: Install kubectl
+
+      - name: Setup kubectl
         uses: azure/setup-kubectl@v3
         with:
-          version: 'latest'
-          
+          version: 'v1.28.0'
+
+      - name: Configure Kubernetes context
+        env:
+          KUBE_CONFIG: ${{ secrets.KUBE_CONFIG }}
+          KUBE_SERVER: ${{ secrets.KUBE_SERVER }}
+          KUBE_TOKEN: ${{ secrets.KUBE_TOKEN }}
+        run: |
+          if [ -n "$KUBE_CONFIG" ]; then
+            echo "Using KUBE_CONFIG from secrets"
+            echo "$KUBE_CONFIG" | base64 -d > ~/.kube/config
+          elif [ -n "$KUBE_SERVER" ] && [ -n "$KUBE_TOKEN" ]; then
+            echo "Configuring kubectl with server and token"
+            kubectl config set-cluster k8s-cluster --server="$KUBE_SERVER" --insecure-skip-tls-verify=true
+            kubectl config set-credentials k8s-user --token="$KUBE_TOKEN"
+            kubectl config set-context k8s-context --cluster=k8s-cluster --user=k8s-user
+            kubectl config use-context k8s-context
+          else
+            echo "ERROR: No Kubernetes credentials found in secrets"
+            echo "Please set either KUBE_CONFIG or both KUBE_SERVER and KUBE_TOKEN"
+            exit 1
+          fi
+
+      - name: Verify Kubernetes connection
+        run: |
+          kubectl cluster-info
+          kubectl get nodes
+
+      - name: Set deployment environment variables
+        run: |
+          echo "ENVIRONMENT=${{ inputs.environment || 'staging' }}" >> $GITHUB_ENV
+          echo "NAMESPACE=ojala-${{ inputs.environment || 'staging' }}" >> $GITHUB_ENV
+
+      - name: Create namespace if it doesn't exist
+        run: |
+          kubectl create namespace "$NAMESPACE" --dry-run=client -o yaml | kubectl apply -f -
+
       - name: Make deploy script executable
-        run: chmod +x scripts/deploy-k8s.sh
-        
-      - name: Run deploy script
-        run: ./scripts/deploy-k8s.sh 
+        run: chmod +x scripts/deploy/deploy-k8s.sh
+
+      - name: Run deployment script
+        env:
+          ENVIRONMENT: ${{ env.ENVIRONMENT }}
+          NAMESPACE: ${{ env.NAMESPACE }}
+        run: |
+          if [ -f "scripts/deploy/deploy-k8s.sh" ]; then
+            ./scripts/deploy/deploy-k8s.sh
+          elif [ -f "scripts/deploy-k8s.sh" ]; then
+            ./scripts/deploy-k8s.sh
+          else
+            echo "ERROR: Deploy script not found"
+            echo "Expected: scripts/deploy/deploy-k8s.sh or scripts/deploy-k8s.sh"
+            exit 1
+          fi
+
+      - name: Verify deployment
+        run: |
+          echo "Checking deployment status in namespace: $NAMESPACE"
+          kubectl get deployments -n "$NAMESPACE"
+          kubectl get services -n "$NAMESPACE"
+          kubectl get pods -n "$NAMESPACE"
+
+          # Wait for deployments to be ready
+          kubectl wait --for=condition=available --timeout=300s deployment --all -n "$NAMESPACE" || {
+            echo "Some deployments failed to become ready"
+            kubectl describe deployments -n "$NAMESPACE"
+            exit 1
+          }
