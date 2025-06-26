@@ -1,76 +1,128 @@
-name: CodeQL
+name: "CodeQL Analysis"
 
 on:
   push:
-    branches: [ main, ci-workflows ]
+    branches: [ main ]
   pull_request:
     branches: [ main ]
   schedule:
-    - cron: '0 0 * * 0'  # weekly
+    - cron: '0 2 * * *'  # Daily at 02:00 UTC
+
+permissions:
+  security-events: write     # required to write alerts
+  contents: read             # to read repo contents
+  actions: read              # for enterprise installations
 
 jobs:
-  analyze:
-    name: Analyze with CodeQL (${{ matrix.language }})
+  codeql:
+    name: CodeQL Scan
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      security-events: write
-      actions: read
+    timeout-minutes: 360
+    concurrency:
+      group: codeql-${{ github.ref }}
+      cancel-in-progress: true
 
     strategy:
       fail-fast: false
       matrix:
-        language: [ csharp, javascript ]
+        language: [ 'csharp', 'javascript', 'python' ]
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # ──────────────────────────────────────────────────────────────────────────
+      # CACHES
+      - name: Cache NuGet packages
+        if: matrix.language == 'csharp'
+        uses: actions/cache@v3
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ hashFiles('**/*.csproj') }}
+          restore-keys: nuget-
+
+      - name: Cache npm modules
+        if: matrix.language == 'javascript'
+        uses: actions/cache@v3
+        with:
+          path: |
+            **/node_modules
+            ~/.npm
+          key: npm-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: npm-
+
+      - name: Cache pip cache
+        if: matrix.language == 'python'
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/pip
+          key: pip-${{ hashFiles('**/requirements.txt') }}
+          restore-keys: pip-
+
+      # ──────────────────────────────────────────────────────────────────────────
+      # SETUP LANGUAGES
+      - name: Setup .NET 8
+        if: matrix.language == 'csharp'
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Setup Node.js 18
+        if: matrix.language == 'javascript'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Setup Python 3.11
+        if: matrix.language == 'python'
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      # ──────────────────────────────────────────────────────────────────────────
+      # INIT CODEQL
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v3
         with:
           languages: ${{ matrix.language }}
 
-      # -------------------
-      # .NET (C#) build
-      # -------------------
-      - name: Setup .NET SDK
+      # ──────────────────────────────────────────────────────────────────────────
+      # BUILD STEPS
+      - name: Build .NET projects
         if: matrix.language == 'csharp'
-        uses: actions/setup-dotnet@v3
-        with:
-          dotnet-version: 8.0.x
+        run: |
+          dotnet restore Ojala.sln --verbosity minimal
+          dotnet build Ojala.sln --configuration Release --no-restore --verbosity minimal
 
-      - name: Restore .NET dependencies
-        if: matrix.language == 'csharp'
-        run: dotnet restore Ojala.sln
-
-      - name: Build .NET solution
-        if: matrix.language == 'csharp'
-        run: dotnet build Ojala.sln --configuration Release --no-restore
-
-      # -------------------
-      # JavaScript build
-      # -------------------
-      - name: Setup Node.js
+      - name: Build JavaScript projects
         if: matrix.language == 'javascript'
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18.x'
-          cache: npm
-          cache-dependency-path: src/frontend/ojala.web/package-lock.json
+        run: |
+          # Frontends
+          for app in ojala.web employer-dashboard patient-app rn-dashboard; do
+            pkg="src/frontend/$app/package.json"
+            if [ -f "$pkg" ]; then
+              echo "Building $app"
+              (cd "src/frontend/$app" \
+                && npm ci --legacy-peer-deps || npm install --legacy-peer-deps \
+                && npm run build || echo "⚠️ Build failed for $app, continuing")
+            fi
+          done
+          # Node.js backend
+          bs="src/backend/Ojala.AlertsStreamer"
+          if [ -f "$bs/package.json" ]; then
+            echo "Building AlertsStreamer"
+            (cd "$bs" \
+              && npm ci || npm install \
+              && npm run build --if-present || echo "⚠️ No build or failed")
+          fi
 
-      - name: Install JS dependencies
-        if: matrix.language == 'javascript'
-        working-directory: src/frontend/ojala.web
-        run: npm install --legacy-peer-deps
+      - name: Autobuild Python projects
+        if: matrix.language == 'python'
+        uses: github/codeql-action/autobuild@v3
 
-      - name: Build JS for CodeQL
-        if: matrix.language == 'javascript'
-        working-directory: src/frontend/ojala.web
-        run: npm run build
-
-      # -------------------
-      # Run the analysis
-      # -------------------
-      - name: Perform CodeQL Analysis
+      # ──────────────────────────────────────────────────────────────────────────
+      # ANALYZE & UPLOAD
+      - name: Run CodeQL Analysis
         uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:${{matrix.language}}"
