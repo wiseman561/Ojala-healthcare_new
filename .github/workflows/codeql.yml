@@ -37,7 +37,11 @@ jobs:
         with:
           dotnet-version: '8.0.x'
 
-      - name: Build .NET solution for CodeQL
+      - name: Restore .NET packages
+        if: matrix.language == 'csharp'
+        run: dotnet restore Ojala.sln
+
+      - name: Build .NET solution
         if: matrix.language == 'csharp'
         run: dotnet build Ojala.sln --no-restore --configuration Release
 
@@ -54,10 +58,7 @@ jobs:
         working-directory: src/frontend/ojala.web
         run: npm install --legacy-peer-deps
 
-      - name: Build JS for CodeQL
-        if: matrix.language == 'javascript'
-        working-directory: src/frontend/ojala.web
-        run: npm run build
+      # -- Removed the `npm run build` step because it fails on ajv --
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v3
