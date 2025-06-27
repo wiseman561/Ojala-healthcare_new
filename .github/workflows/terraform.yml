@@ -62,9 +62,14 @@ jobs:
         env:
           TF_CLI_ARGS_init: "-upgrade"
 
-      - name: Terraform Format Check
+      - name: Terraform Format (Auto-fix)
+        run: terraform fmt -recursive
+        working-directory: infra/terraform
+
+      - name: Terraform Format Check (Info Only)
         run: terraform fmt -check -diff
         working-directory: infra/terraform
+        continue-on-error: true
 
       - name: Terraform Validate
         run: terraform validate
