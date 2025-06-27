@@ -171,25 +171,72 @@ resource "aws_security_group" "db" {
   }
 }
 
-# ElastiCache Redis
-module "redis" {
-  source                  = "./modules/redis"
-  cluster_id              = "ojala-redis-${var.environment}"
-  engine                  = "redis"
-  engine_version          = "6.x"
-  port                    = 6379
-  num_cache_nodes         = var.environment == "production" ? 2 : 1
-  node_type               = var.redis_node_type
-  subnet_group_name       = aws_elasticache_subnet_group.redis.name
-  security_group_ids      = [aws_security_group.redis.id]
-  maintenance_window      = "Tue:03:00-Tue:04:00"
-  snapshot_window         = "04:00-05:00"
-  auto_minor_version_upgrade = true
+# ElastiCache Redis Subnet Group
+resource "aws_elasticache_subnet_group" "redis" {
+  name       = "ojala-redis-sg-${var.environment}"
+  subnet_ids = module.vpc.private_subnets
 
   tags = {
-    Environment = var.environment,
-    Project     = "ojala-healthcare",
-    Terraform   = "true",
+    Environment = var.environment
+    Project     = "ojala-healthcare"
+    Terraform   = "true"
+  }
+}
+
+# Security group for Redis
+resource "aws_security_group" "redis" {
+  name        = "ojala-redis-sg-${var.environment}"
+  description = "Security group for Ojala Redis"
+  vpc_id      = module.vpc.vpc_id
+
+  ingress {
+    description     = "Redis from EKS nodes"
+    from_port       = 6379
+    to_port         = 6379
+    protocol        = "tcp"
+    security_groups = [module.eks.node_security_group_id]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Environment = var.environment
+    Project     = "ojala-healthcare"
+    Terraform   = "true"
+  }
+}
+
+# ElastiCache Redis
+resource "aws_elasticache_replication_group" "redis" {
+  replication_group_id       = "ojala-redis-${var.environment}"
+  description                = "Ojala Redis cluster"
+
+  node_type                  = var.redis_node_type
+  port                       = 6379
+  parameter_group_name       = "default.redis6.x"
+
+  num_cache_clusters         = var.environment == "production" ? 2 : 1
+
+  engine_version             = "6.2"
+  subnet_group_name          = aws_elasticache_subnet_group.redis.name
+  security_group_ids         = [aws_security_group.redis.id]
+
+  maintenance_window         = "tue:03:00-tue:04:00"
+  snapshot_window            = "04:00-05:00"
+  auto_minor_version_upgrade = true
+
+  at_rest_encryption_enabled = true
+  transit_encryption_enabled = true
+
+  tags = {
+    Environment = var.environment
+    Project     = "ojala-healthcare"
+    Terraform   = "true"
   }
 }
 
