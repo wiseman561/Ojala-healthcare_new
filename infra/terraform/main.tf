@@ -111,14 +111,14 @@ resource "aws_kms_key" "eks" {
 # RDS PostgreSQL Database
 module "db" {
   source                 = "terraform-aws-modules/rds/aws"
-  version                = "~> 3.0"
+  version                = "~> 6.0"
   identifier             = "ojala-postgres-${var.environment}"
   engine                 = "postgres"
   engine_version         = "14.5"
   instance_class         = var.db_instance_class
   allocated_storage      = var.db_allocated_storage
   storage_encrypted      = true
-  name                   = "ojala"
+  db_name                = "ojala"
   username               = var.db_username
   password               = var.db_password
   port                   = "5432"
