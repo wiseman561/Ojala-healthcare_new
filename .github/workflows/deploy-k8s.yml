@@ -34,57 +34,33 @@ jobs:
         with:
           version: 'v1.28.0'
 
-      - name: Check Kubernetes credentials
-        id: check-creds
+      - name: Detect Kube Credentials
+        id: detect-creds
         env:
           KUBE_CONFIG: ${{ secrets.KUBE_CONFIG }}
           KUBE_SERVER: ${{ secrets.KUBE_SERVER }}
           KUBE_TOKEN: ${{ secrets.KUBE_TOKEN }}
         run: |
           if [ -n "$KUBE_CONFIG" ]; then
-            echo "auth-method=kube-config" >> $GITHUB_OUTPUT
-            echo "has-credentials=true" >> $GITHUB_OUTPUT
-            echo "✅ Found KUBE_CONFIG secret"
+            echo "🔑 KUBE_CONFIG secret found - using kubeconfig authentication"
+            mkdir -p ~/.kube
+            echo "${{ secrets.KUBE_CONFIG }}" | base64 -d > ~/.kube/config
+            chmod 600 ~/.kube/config
+            echo "credentials-configured=true" >> $GITHUB_OUTPUT
           elif [ -n "$KUBE_SERVER" ] && [ -n "$KUBE_TOKEN" ]; then
-            echo "auth-method=server-token" >> $GITHUB_OUTPUT
-            echo "has-credentials=true" >> $GITHUB_OUTPUT
-            echo "✅ Found KUBE_SERVER and KUBE_TOKEN secrets"
+            echo "🔑 KUBE_SERVER and KUBE_TOKEN secrets found - using server/token authentication"
+            kubectl config set-cluster default-cluster --server="${{ secrets.KUBE_SERVER }}"
+            kubectl config set-credentials deployer --token="${{ secrets.KUBE_TOKEN }}"
+            kubectl config set-context default --cluster=default-cluster --user=deployer
+            kubectl config use-context default
+            echo "credentials-configured=true" >> $GITHUB_OUTPUT
           else
-            echo "auth-method=none" >> $GITHUB_OUTPUT
-            echo "has-credentials=false" >> $GITHUB_OUTPUT
-            echo "⚠️  No Kubernetes credentials found in repository secrets"
-            echo ""
-            echo "To enable deployment, add one of the following to your repository secrets:"
-            echo "  Option 1: KUBE_CONFIG (base64-encoded kubeconfig file)"
-            echo "  Option 2: KUBE_SERVER (API server URL) + KUBE_TOKEN (service account token)"
-            echo ""
-            echo "Deployment steps will be skipped."
+            echo "🚨 No Kubernetes credentials found; skipping deployment."
+            echo "credentials-configured=false" >> $GITHUB_OUTPUT
           fi
 
-      - name: Configure Kubernetes context (KUBE_CONFIG)
-        if: steps.check-creds.outputs.auth-method == 'kube-config'
-        env:
-          KUBE_CONFIG: ${{ secrets.KUBE_CONFIG }}
-        run: |
-          echo "📝 Configuring kubectl using KUBE_CONFIG..."
-          mkdir -p ~/.kube
-          echo "$KUBE_CONFIG" | base64 -d > ~/.kube/config
-          chmod 600 ~/.kube/config
-
-      - name: Configure Kubernetes context (Server + Token)
-        if: steps.check-creds.outputs.auth-method == 'server-token'
-        env:
-          KUBE_SERVER: ${{ secrets.KUBE_SERVER }}
-          KUBE_TOKEN: ${{ secrets.KUBE_TOKEN }}
-        run: |
-          echo "📝 Configuring kubectl using server and token..."
-          kubectl config set-cluster default-cluster --server="$KUBE_SERVER"
-          kubectl config set-credentials deployer --token="$KUBE_TOKEN"
-          kubectl config set-context default --cluster=default-cluster --user=deployer
-          kubectl config use-context default
-
       - name: Verify Kubernetes connection
-        if: steps.check-creds.outputs.has-credentials == 'true'
+        if: steps.detect-creds.outputs.credentials-configured == 'true'
         run: |
           echo "🔗 Verifying Kubernetes connection..."
           kubectl cluster-info
@@ -93,7 +69,7 @@ jobs:
           kubectl get nodes
 
       - name: Set deployment environment variables
-        if: steps.check-creds.outputs.has-credentials == 'true'
+        if: steps.detect-creds.outputs.credentials-configured == 'true'
         run: |
           echo "ENVIRONMENT=${{ inputs.environment || 'staging' }}" >> $GITHUB_ENV
           echo "NAMESPACE=ojala-${{ inputs.environment || 'staging' }}" >> $GITHUB_ENV
@@ -101,17 +77,17 @@ jobs:
           echo "🏷️  Namespace: ojala-${{ inputs.environment || 'staging' }}"
 
       - name: Create namespace if it doesn't exist
-        if: steps.check-creds.outputs.has-credentials == 'true'
+        if: steps.detect-creds.outputs.credentials-configured == 'true'
         run: |
           echo "🏗️  Creating namespace if it doesn't exist..."
           kubectl create namespace "$NAMESPACE" --dry-run=client -o yaml | kubectl apply -f -
 
       - name: Make deploy script executable
-        if: steps.check-creds.outputs.has-credentials == 'true'
+        if: steps.detect-creds.outputs.credentials-configured == 'true'
         run: chmod +x scripts/deploy/deploy-k8s.sh
 
       - name: Run deployment script
-        if: steps.check-creds.outputs.has-credentials == 'true'
+        if: steps.detect-creds.outputs.credentials-configured == 'true'
         env:
           ENVIRONMENT: ${{ env.ENVIRONMENT }}
           NAMESPACE: ${{ env.NAMESPACE }}
@@ -128,7 +104,7 @@ jobs:
           fi
 
       - name: Verify deployment
-        if: steps.check-creds.outputs.has-credentials == 'true'
+        if: steps.detect-creds.outputs.credentials-configured == 'true'
         run: |
           echo "✅ Checking deployment status in namespace: $NAMESPACE"
           echo ""
@@ -153,21 +129,3 @@ jobs:
           }
 
           echo "🎉 All deployments are ready!"
-
-      - name: Deployment skipped
-        if: steps.check-creds.outputs.has-credentials == 'false'
-        run: |
-          echo "⏩ Deployment was skipped due to missing Kubernetes credentials."
-          echo ""
-          echo "To enable deployment, please add one of the following secrets to your repository:"
-          echo "• Settings → Secrets and variables → Actions → New repository secret"
-          echo ""
-          echo "Option 1 - Single kubeconfig file:"
-          echo "  Name: KUBE_CONFIG"
-          echo "  Value: <base64-encoded-kubeconfig-content>"
-          echo ""
-          echo "Option 2 - Server and token pair:"
-          echo "  Name: KUBE_SERVER"
-          echo "  Value: <kubernetes-api-server-url>"
-          echo "  Name: KUBE_TOKEN"
-          echo "  Value: <service-account-token>"
